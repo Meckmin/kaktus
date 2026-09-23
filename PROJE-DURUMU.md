@@ -52,8 +52,8 @@ A coach who went from 45 to 95 net is real evidence for a student who needs to g
 from 40 to 90. Nobody else in the Turkish market ranks coaches this way.
 
 The other factors are working style, matching free hours, subject depth, budget fit,
-past student feedback, and experience with that specific year group (11th grade, 12th
-grade, or gap year).
+past student feedback, and experience with that specific year group (9th–11th grade,
+12th grade, or gap year).
 
 Two deliberate choices inside it:
 
@@ -286,6 +286,41 @@ sentence has been true.
 The code now also lives on GitHub properly, with that automated check running on
 every change, rather than sitting only on one laptop.
 
+### Stage fourteen — Polishing what people actually read, and cleaning house
+
+A full pass over the wording students and coaches see, driven by a written list of
+things that read wrong: the homepage, all five questionnaire steps, the coach search
+results, coach profiles, and the coach application. Most of it is shorter, plainer
+sentences, and a simple "1/5" step counter instead of "step 1 of 5". Two changes are
+more than wording:
+
+- **Younger students are welcome.** The "11th grade" choice became "9th–11th grade",
+  for students and in the coach application alike, so a 9th or 10th grader no longer
+  looks like they are in the wrong place.
+- **A coach's own climb now shows both exams.** Instead of one combined number
+  ("81 → 104 net"), cards and profiles show TYT and AYT separately, and rankings read
+  the way students say them ("SAY 890"). The matching still weighs it exactly as before.
+
+"Request an offer" on a search result now opens the calendar and offer form directly,
+instead of making the student scroll through the whole profile first.
+
+Three real problems were found and fixed along the way:
+
+- A student who had answered every question could still be told "your student profile
+  hasn't been created yet" when sending their first offer. The system now recovers
+  their answers at that moment instead of failing.
+- The current-scores step now lets students skip TYT as well as AYT — someone who has
+  not sat a practice exam yet should not be stuck there.
+- A student who knew only their target department ("Tıp"), with no ranking or
+  university, could not get past step two. They can now.
+
+That last one is worth a sentence on how it was found. Some of the automated tests
+turned out to be checking **copies** of code the site does not actually use — so they
+passed while the real site misbehaved. The tests now check the real code, which is
+what exposed the bug. The unused copies, an unused internal endpoint, and an outdated
+project-setup script that would have quietly restored all of them were removed, so
+the next person reading the code only sees what actually runs.
+
 ---
 
 ## 3. Where things stand honestly
@@ -299,7 +334,9 @@ milestone payouts, dispute resolution, reviews, coach earnings, and the email
 notifications that tell people any of this happened — now sent through a real
 provider, not just printed to a file. The button-to-database layer (send this
 message, accept this offer, and so on) is also now directly covered by automated
-tests, not just the machinery underneath it. All of it has been used, live, by a real
+tests, not just the machinery underneath it — and the tests for the questionnaire and
+the search results now check the code the site actually runs, rather than unused
+copies of it. All of it has been used, live, by a real
 test student and a real test coach account — not just read for errors.
 
 **Deliberately on hold, waiting for a real decision:** an automated way to move money
@@ -355,7 +392,7 @@ any file on disk) becomes worth the smaller amount of protection it buys.
 
 ---
 
-*Last updated after closing the button-to-database test gap, connecting a real
-email provider (Resend) so notifications and sign-in links actually reach people,
-and deciding to defer the automatic payout job queue until the deploy target and
-real payment provider are chosen.*
+*Last updated 23 September 2026, after the wording and usability pass on the student
+and coach screens, the three fixes above (first-offer failure, optional TYT, target
+by department only), and pointing the automated tests at the code the site actually
+runs.*
