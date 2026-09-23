@@ -9,10 +9,13 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
  * AES-256-GCM, so the ciphertext is authenticated — a tampered value fails to
  * decrypt rather than silently returning garbage that then gets sent to a bank.
  *
- * This is not a substitute for a KMS. It protects against a leaked backup or a
- * read-only SQL injection, not against an attacker who already has the app's
- * environment. When there is budget for it, move the key into AWS KMS or Vault
- * and keep this interface — the call sites do not need to change.
+ * On its own, a plaintext key in `FIELD_ENCRYPTION_KEY` protects against a
+ * leaked backup or a read-only SQL injection, not against an attacker who
+ * already has the app's environment. `setFieldEncryptionKey` below is the
+ * upgrade path: `src/instrumentation.ts` calls it once at boot with a key
+ * unwrapped from AWS KMS (see `src/lib/crypto/kms.ts`) when KMS is configured,
+ * and every call site here is unaffected — `encryptField`/`decryptField` don't
+ * know or care where the key came from.
  */
 
 const ALGORITHM = 'aes-256-gcm';
@@ -20,6 +23,20 @@ const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
 let cachedKey: Buffer | null = null;
+
+/**
+ * Installs a key resolved elsewhere (KMS today; a future secrets manager
+ * tomorrow) so `key()` below never falls through to the plaintext env var.
+ * Called once, at boot, by `src/instrumentation.ts` — never mid-request,
+ * since swapping the key under in-flight encrypt/decrypt calls would be a
+ * hard-to-diagnose way to corrupt data.
+ */
+export function setFieldEncryptionKey(raw: Buffer): void {
+  if (raw.length !== 32) {
+    throw new Error(`Field encryption key must be exactly 32 bytes, got ${raw.length}.`);
+  }
+  cachedKey = raw;
+}
 
 function key(): Buffer {
   if (cachedKey) return cachedKey;

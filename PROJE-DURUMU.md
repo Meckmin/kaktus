@@ -312,6 +312,15 @@ whenever the switch away from the mock payment provider to real Iyzico payments
 happens — that is also the point real money starts moving automatically, which is
 when the risk this protects against actually exists.
 
+Also on hold: moving the encryption key for sensitive fields (IBAN, national ID
+numbers) out of a plain environment variable and into a real key-management service.
+The code for this is already written and does nothing until switched on — it was
+built expecting AWS KMS, which turned out to need banking details to even open an
+account, and that friction isn't worth pushing through before there is real payout
+data to protect. Revisit alongside the job queue above, or sooner if a
+lower-friction option (a self-hosted alternative, or simply keeping the key out of
+any file on disk) becomes worth the smaller amount of protection it buys.
+
 ---
 
 ## 4. What to do next
@@ -325,7 +334,8 @@ when the risk this protects against actually exists.
   we handle student and coach data.
 - Decide how document verification actually works day to day — who checks them, against
   what standard, how fast.
-- Move the encryption of sensitive data to a proper key-management service.
+- Move the encryption of sensitive data to a proper key-management service (code
+  ready, on hold — see section 3).
 - Verify a real sending domain in Resend and switch `EMAIL_FROM` to it — right now
   mail goes out from Resend's own shared testing address, which works but is not a
   professional look for something a paying customer receives.

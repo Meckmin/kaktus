@@ -69,6 +69,17 @@ const schema = z
     // name must match exactly, or that module fails at first use instead of at
     // boot, which is the whole point of validating it here.
     FIELD_ENCRYPTION_KEY: base64Key32.optional(),
+    // ── Field encryption key, KMS-wrapped (see lib/crypto/kms.ts) ────────────
+    // When set, instrumentation.ts unwraps this through AWS KMS at boot and
+    // FIELD_ENCRYPTION_KEY above is never read — the plaintext env var is the
+    // dev/fallback path, this is the production one. Generated once with
+    // scripts/kms-generate-key.mjs; read directly by lib/crypto/kms.ts.
+    FIELD_ENCRYPTION_KMS_CIPHERTEXT: z.string().min(1).optional(),
+    AWS_REGION: z.string().min(1).optional(),
+    // Optional, but recommended once set: pins Decrypt to this specific key so
+    // a ciphertext blob swapped in from elsewhere fails instead of silently
+    // decrypting under the wrong key. Accepts a key id or ARN.
+    AWS_KMS_KEY_ID: z.string().min(1).optional(),
 
     // ── Storage (private bucket for verification documents) ─────────────────
     SUPABASE_URL: z.string().url().optional(),
@@ -100,6 +111,9 @@ const schema = z
     }
     if (Boolean(val.AUTH_GOOGLE_ID) !== Boolean(val.AUTH_GOOGLE_SECRET)) {
       need('AUTH_GOOGLE_SECRET', 'set both AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET, or neither');
+    }
+    if (val.FIELD_ENCRYPTION_KMS_CIPHERTEXT && !val.AWS_REGION) {
+      need('AWS_REGION', 'required when FIELD_ENCRYPTION_KMS_CIPHERTEXT is set');
     }
     if (isProd && val.SUPABASE_URL && !val.SUPABASE_SERVICE_ROLE_KEY) {
       need('SUPABASE_SERVICE_ROLE_KEY', 'required when SUPABASE_URL is set');
