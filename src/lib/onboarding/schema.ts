@@ -38,8 +38,8 @@ export const STEPS: StepMeta[] = [
   {
     slug: 'net',
     index: 2,
-    question: 'Şu an kaç net yapıyorsun?',
-    hint: 'Son denemeni yaz. Tahmini olması sorun değil.',
+    question: 'Güncel netlerin ne?',
+    hint: 'Henüz bilmiyorsan boş bırak.',
   },
   { slug: 'tarz', index: 3, question: 'Nasıl bir koç seni daha iyi çalıştırır?' },
   {
@@ -100,83 +100,6 @@ export function completionRatio(a: OnboardingAnswers): number {
   const done = STEPS.filter((s) => isStepComplete(s.slug, a)).length;
   return done / STEPS.length;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Option data
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const TRACK_OPTIONS: Array<{
-  value: Track;
-  label: string;
-  short: string;
-  detail: string;
-}> = [
-  { value: 'SAYISAL', label: 'Sayısal', short: 'SAY', detail: 'Matematik, Fizik, Kimya, Biyoloji' },
-  { value: 'ESIT_AGIRLIK', label: 'Eşit Ağırlık', short: 'EA', detail: 'Matematik, Edebiyat, Tarih, Coğrafya' },
-  { value: 'SOZEL', label: 'Sözel', short: 'SÖZ', detail: 'Edebiyat, Tarih, Coğrafya, Felsefe' },
-  { value: 'DIL', label: 'Dil', short: 'DİL', detail: 'YDT İngilizce, Almanca, Fransızca' },
-];
-
-export const GRADE_OPTIONS: Array<{ value: GradeLevel; label: string; detail: string }> = [
-  { value: 'GRADE_11', label: '11. sınıf', detail: 'Erken başlıyorum' },
-  { value: 'GRADE_12', label: '12. sınıf', detail: 'Bu yıl gireceğim' },
-  { value: 'MEZUN', label: 'Mezun', detail: 'Tekrar gireceğim' },
-];
-
-export const STYLE_OPTIONS: Array<{
-  value: CoachingStyle;
-  label: string;
-  detail: string;
-}> = [
-  {
-    value: 'STRICT',
-    label: 'Sıkı takip',
-    detail: 'Program verir, uymadığında üstüne gelir. Disiplini dışarıdan kurar.',
-  },
-  {
-    value: 'EMPATHETIC',
-    label: 'Mentor gibi',
-    detail: 'Önce motivasyonunla ilgilenir. Kötü geçen haftada seni ayağa kaldırır.',
-  },
-  {
-    value: 'STRATEGIC',
-    label: 'Strateji odaklı',
-    detail: 'Net analizi, deneme taktiği, hangi konuya kaç saat. Sayılarla konuşur.',
-  },
-  {
-    value: 'HIGH_TOUCH',
-    label: 'Sık görüşme',
-    detail: 'Haftada birden fazla temas, günlük mesajlaşma. Yalnız bırakmaz.',
-  },
-];
-
-/** Budget bands in kuruş. Anchored to what coaching actually costs in TR. */
-export const BUDGET_BANDS: Array<{ label: string; minMinor: number; maxMinor: number }> = [
-  { label: "1.500 ₺'ye kadar", minMinor: 0, maxMinor: 150_000 },
-  { label: '1.500 – 3.000 ₺', minMinor: 150_000, maxMinor: 300_000 },
-  { label: '3.000 – 5.000 ₺', minMinor: 300_000, maxMinor: 500_000 },
-  { label: '5.000 ₺ ve üzeri', minMinor: 500_000, maxMinor: 1_200_000 },
-];
-
-export const TRACK_LABEL: Record<Track, string> = {
-  SAYISAL: 'Sayısal',
-  ESIT_AGIRLIK: 'Eşit Ağırlık',
-  SOZEL: 'Sözel',
-  DIL: 'Dil',
-};
-
-export const GRADE_LABEL: Record<GradeLevel, string> = {
-  GRADE_11: '11. sınıf',
-  GRADE_12: '12. sınıf',
-  MEZUN: 'Mezun',
-};
-
-export const STYLE_LABEL: Record<CoachingStyle, string> = {
-  STRICT: 'Sıkı takip',
-  EMPATHETIC: 'Mentor gibi',
-  STRATEGIC: 'Strateji odaklı',
-  HIGH_TOUCH: 'Sık görüşme',
-};
 
 /** AYT net ceiling differs by track; the input must not allow impossible values. */
 export const AYT_MAX_NET: Record<Track, number> = {

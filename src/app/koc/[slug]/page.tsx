@@ -175,17 +175,6 @@ function Methodology({
           <p key={index}>{paragraph}</p>
         ))}
       </div>
-
-      {coach.specializations.length > 0 && (
-        <ul className="mt-6 space-y-2">
-          {coach.specializations.map((spec) => (
-            <li key={spec.label} className="flex gap-2.5 leading-snug">
-              <span aria-hidden className="mt-[9px] size-1.5 shrink-0 rounded-full bg-cactus" />
-              {spec.label}
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
   );
 }

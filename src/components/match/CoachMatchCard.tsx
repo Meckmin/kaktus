@@ -163,7 +163,6 @@ function MatchBreakdown({ coach, limit }: { coach: CoachMatchView; limit: number
       {items.map((item) => (
         <li
           key={item.key}
-          title={item.reason}
           className="rounded-lg border border-stone/70 bg-limestone/60 px-3 py-2"
         >
           <div className="flex items-baseline gap-2">
