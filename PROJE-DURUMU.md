@@ -245,9 +245,12 @@ None of stage eleven means anything if nobody hears about it. A coach who is not
 "you have an offer" has to keep checking the site by hand, which is exactly the kind
 of friction that makes a two-sided marketplace fail. Every meaningful moment — an
 offer arriving, being accepted, paid, disputed, or resolved — now sends an email to
-whoever needs to see it. Locally, and until a mail account is connected, it prints to
-a file instead of vanishing into a test inbox nobody reads; the moment a real mail
-provider is configured, the same code sends real email, unchanged.
+whoever needs to see it. A real mail provider (Resend) is now connected and sending
+real email — verified with an actual delivery to a real inbox, both through the
+sign-in link and through the general notification path. The sender address is
+still Resend's own shared testing address rather than a domain we have verified
+ourselves; switching to a real domain later is a one-line configuration change,
+not a code change.
 
 ### Stage thirteen — Finding out what actually happens when this runs for real
 
@@ -293,33 +296,25 @@ handling and escrow logic including weekly payout and disputes, the payment
 integration, the student questionnaire and results, coach profiles with calendars, the
 offer builder, the coach application, the message filter, the negotiation/chat screen,
 milestone payouts, dispute resolution, reviews, coach earnings, and the email
-notifications that tell people any of this happened. All of it has been used, live, by
-a real test student and a real test coach account — not just read for errors.
+notifications that tell people any of this happened — now sent through a real
+provider, not just printed to a file. The button-to-database layer (send this
+message, accept this offer, and so on) is also now directly covered by automated
+tests, not just the machinery underneath it. All of it has been used, live, by a real
+test student and a real test coach account — not just read for errors.
 
-**Not built yet, on purpose:** an automated way to actually move money out to a
-coach's bank account on a schedule — this exists and has been tested, but is
-deliberately still a manual trigger rather than an automatic one, because doing it
-automatically needs a proper job queue (so a failed transfer is retried and never
-silently lost), and building that queue before there is real money to move would be
-solving a problem we do not have yet.
-
-**Thinner than it should be:** the individual actions a button click triggers (send
-this message, accept this offer, and so on) are not directly covered by the automated
-tests — the machinery underneath them is, thoroughly, but a mistake made specifically
-in the thin layer connecting a button to that machinery could still slip through.
-Closing this is next on the list.
+**Deliberately on hold, waiting for a real decision:** an automated way to move money
+out to a coach's bank account on a schedule. This exists and has been tested, but
+stays a manual trigger on purpose — automating it safely needs a proper job queue (so
+a failed transfer is retried and never silently lost), and which queue is the right
+one depends on where this gets deployed and hosted, which is not decided yet. Building
+it now would mean guessing at that answer twice. The natural time to revisit this is
+whenever the switch away from the mock payment provider to real Iyzico payments
+happens — that is also the point real money starts moving automatically, which is
+when the risk this protects against actually exists.
 
 ---
 
 ## 4. What to do next
-
-### Right now — close the remaining test gap
-
-The one honest weak spot left, described in section 3: write automated checks for the
-button-to-database layer itself, not just the logic underneath it. Not urgent — nothing
-is currently known to be broken there — but it is the difference between "we would
-probably notice" and "we are sure we would notice" if someone changed that layer
-carelessly six months from now.
 
 ### Before taking real money
 
@@ -331,10 +326,10 @@ carelessly six months from now.
 - Decide how document verification actually works day to day — who checks them, against
   what standard, how fast.
 - Move the encryption of sensitive data to a proper key-management service.
-- Connect a real mail account so the notifications built in stage twelve actually
-  reach people, instead of printing to a local file.
-- Build the proper job queue mentioned in section 3, so payouts to coaches can run
-  on a schedule instead of a manual trigger.
+- Verify a real sending domain in Resend and switch `EMAIL_FROM` to it — right now
+  mail goes out from Resend's own shared testing address, which works but is not a
+  professional look for something a paying customer receives.
+- Decide where this deploys, then build the job queue mentioned in section 3 for it.
 
 ### Decisions that need you, not me
 
@@ -350,6 +345,7 @@ carelessly six months from now.
 
 ---
 
-*Last updated after the negotiation/payments/disputes build-out, the database
-audit that found and fixed the double-booking and payment-ordering bugs, and moving
-the project onto GitHub with automated testing on every change.*
+*Last updated after closing the button-to-database test gap, connecting a real
+email provider (Resend) so notifications and sign-in links actually reach people,
+and deciding to defer the automatic payout job queue until the deploy target and
+real payment provider are chosen.*
