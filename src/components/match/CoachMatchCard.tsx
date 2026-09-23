@@ -1,7 +1,7 @@
 'use client';
 
 import { DIMENSION_LABELS, TRACK_SHORT_CODES, formatNetJourney, formatTry } from '@/lib/onboarding/client-state';
-import type { CoachMatchView } from '@/server/actions/onboarding';
+import type { CoachMatchView } from '@/lib/matching/view';
 import { useAuthGate } from '@/components/auth/AuthGate';
 
 /**

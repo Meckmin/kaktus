@@ -7,7 +7,7 @@ import {
   formatTry,
   type OnboardingDraft,
 } from '@/lib/onboarding/client-state';
-import { toCoachCard } from '@/lib/matching/present';
+import { toCoachMatchView } from '@/lib/matching/view';
 import type { CoachCandidate, MatchResult } from '@/lib/matching/types';
 
 const base: OnboardingDraft = { preferredStyles: [] };
@@ -133,30 +133,56 @@ describe('match pills', () => {
     ],
   } as unknown as MatchResult;
 
-  const card = toCoachCard(result, coach);
+  const view = toCoachMatchView(result, coach);
 
   it('shows percentages that are the scorer\'s own, not invented for display', () => {
-    expect(card.pills.find((p) => p.dimension === 'trackDepth')?.percent).toBe(95);
-  });
-
-  it('drops dimensions too weak to be worth a pill', () => {
-    expect(card.pills.some((p) => p.dimension === 'availability')).toBe(false);
+    expect(view.breakdown.find((p) => p.key === 'trackDepth')?.percent).toBe(95);
+    expect(view.breakdown.find((p) => p.key === 'availability')?.percent).toBe(10);
   });
 
   it('never shows budget as a pill — the price is already on the card', () => {
-    expect(card.pills.some((p) => p.dimension === 'budget')).toBe(false);
+    expect(view.breakdown.some((p) => p.key === 'budget')).toBe(false);
   });
 
-  it('caps the pill count so a card stays scannable', () => {
-    expect(card.pills.length).toBeLessThanOrEqual(4);
+  it('orders pills by contribution to the score, strongest first', () => {
+    expect(view.breakdown.map((p) => p.key)).toEqual([
+      'trajectory',
+      'trackDepth',
+      'style',
+      'reputation',
+      'gradeExperience',
+      'availability',
+    ]);
   });
 
-  it('renders the coach journey as the number pair students recognise', () => {
-    expect(card.journeyLabel).toBe('72 → 98 net');
+  it('labels pills in Turkish', () => {
+    expect(view.breakdown[0].label).toBe('Hedef benzerliği');
   });
 
-  it('omits the journey label when the coach reported no climb', () => {
-    const flat = { ...coach, journey: { ...coach.journey, baselineNet: 98 } } as CoachCandidate;
-    expect(toCoachCard(result, flat).journeyLabel).toBeNull();
+  it('passes both TYT and AYT climbs through for the card', () => {
+    expect(view.journey).toMatchObject({
+      baselineTytNet: 43,
+      finalTytNet: 59,
+      baselineAytNet: 29,
+      finalAytNet: 39,
+      finalRank: 3100,
+      track: 'SAYISAL',
+    });
+  });
+
+  it('shows the cheapest package as the starting price', () => {
+    const multi = {
+      ...coach,
+      pricing: [
+        { cadence: 'MONTHLY_STANDARD', priceMinor: 400_000 },
+        { cadence: 'WEEKLY_SYNC', priceMinor: 120_000 },
+      ],
+    } as CoachCandidate;
+    expect(toCoachMatchView(result, multi).priceFromMinor).toBe(120_000);
+  });
+
+  it('has no starting price when the coach has no packages', () => {
+    const none = { ...coach, pricing: [] } as unknown as CoachCandidate;
+    expect(toCoachMatchView(result, none).priceFromMinor).toBeNull();
   });
 });
