@@ -34,8 +34,14 @@ export interface StudentMatchInput {
 }
 
 export interface CoachJourney {
+  /** TYT + AYT combined — the scale the trajectory scorer works in. */
   baselineNet: number | null;
   finalNet: number | null;
+  /** Same journey, split by exam — for display only; the scorer never reads these. */
+  baselineTytNet: number | null;
+  finalTytNet: number | null;
+  baselineAytNet: number | null;
+  finalAytNet: number | null;
   baselineRank: number | null;
   finalRank: number;
   wasMezun: boolean;

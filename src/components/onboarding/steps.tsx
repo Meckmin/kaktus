@@ -49,7 +49,7 @@ export function StepShell({
             /
           </span>
           <span>
-            {index + 1}. adım, {STEPS.length} adımdan
+            {index + 1}/{STEPS.length}
           </span>
         </nav>
 
@@ -97,7 +97,7 @@ export function StepTrack() {
   const { draft, update } = useOnboarding();
 
   return (
-    <StepShell step="alan" subtitle="Eşleşmenin temeli bu ikisi.">
+    <StepShell step="alan" subtitle="Eşleşmenin temeli burası">
       <fieldset>
         <legend className="mb-3 font-medium">Alanın</legend>
         <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
@@ -160,7 +160,7 @@ export function StepTarget() {
         />
         <div className="mt-4 max-w-xs">
           <NumberField
-            label="Ya da tam sayı yaz"
+            label="Ya da kendin yaz"
             value={draft.targetRanking}
             onChange={(value) => update({ targetRanking: value ? Math.round(value) : null })}
             placeholder="12500"
@@ -204,7 +204,7 @@ export function StepBaseline() {
       <div className="grid gap-5 sm:grid-cols-2">
         <NumberField
           label="TYT neti"
-          hint="120 üzerinden"
+          hint="120 üzerinden — henüz bilmiyorsan boş bırak"
           max={120}
           value={draft.baselineTytNet}
           onChange={(value) => update({ baselineTytNet: value })}
@@ -213,7 +213,7 @@ export function StepBaseline() {
         />
         <NumberField
           label="AYT neti"
-          hint="Henüz denemediysen boş bırak"
+          hint="Henüz bilmiyorsan boş bırak"
           max={80}
           value={draft.baselineAytNet}
           onChange={(value) => update({ baselineAytNet: value })}

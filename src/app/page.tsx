@@ -11,19 +11,10 @@ import Link from 'next/link';
 export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-5xl flex-col px-6 py-10 sm:px-8">
-      <header className="flex items-baseline gap-3">
-        <span className="font-display text-lg font-semibold tracking-tight">Kaktüs Koçluk</span>
-        <span className="text-sm text-muted">YKS koçluk pazarı</span>
-      </header>
-
       <div className="flex flex-1 flex-col justify-center py-16">
         <h1 className="max-w-measure font-display text-question font-semibold text-balance">
-          Hazır paket satın alma. Koçunu seç, şartları birlikte belirleyin.
+          Aradığın koçu bul.
         </h1>
-        <p className="mt-6 max-w-[52ch] text-lg leading-relaxed text-muted">
-          Beş soruya cevap ver, sana uyan koçları eşleşme puanıyla birlikte gör. Üye olmadan.
-          Ödeme, dersler tamamlanana kadar Kaktüs'te güvencede kalır.
-        </p>
 
         <div className="mt-10 flex flex-col gap-3 sm:flex-row">
           <Link

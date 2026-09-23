@@ -7,6 +7,7 @@ import { auth } from '@/lib/auth';
 import { createOffer } from '@/server/services/offer-service';
 import { SlotUnavailableError } from '@/lib/booking/holds';
 import { checkRateLimit, RateLimitError } from '@/lib/rate-limit';
+import { claimOnboardingSessionFromCookie } from '@/lib/onboarding/session';
 import {
   OFFER_DRAFT_COOKIE,
   OFFER_DRAFT_TTL_SECONDS,
@@ -92,10 +93,17 @@ export async function submitOffer(draft: OfferDraft): Promise<SubmitOfferResult>
     throw error;
   }
 
-  const student = await prisma.studentProfile.findUnique({
+  let student = await prisma.studentProfile.findUnique({
     where: { userId: session.user.id },
     select: { id: true },
   });
+  if (!student) {
+    // The sign-in event's claim can miss its window (see session.ts) — retry
+    // once from the still-present onboarding cookie before telling someone
+    // who answered every question that they haven't.
+    const claimed = await claimOnboardingSessionFromCookie(session.user.id);
+    if (claimed) student = { id: claimed.id };
+  }
   if (!student) {
     return {
       ok: false,

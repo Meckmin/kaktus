@@ -44,7 +44,7 @@ export type StepSlug = (typeof STEPS)[number];
 export const STEP_TITLES: Record<StepSlug, string> = {
   alan: 'Hangi alanda hazırlanıyorsun?',
   hedef: 'Hedefin ne?',
-  net: 'Şu an nerede duruyorsun?',
+  net: 'Güncel netlerin ne?',
   tarz: 'Nasıl bir koç seni ileri taşır?',
   butce: 'Aylık ne kadar ayırabilirsin?',
 };
@@ -61,7 +61,9 @@ export function isStepComplete(draft: OnboardingDraft, slug: StepSlug): boolean 
     case 'hedef':
       return draft.targetRanking != null || Boolean(draft.targetUniversity);
     case 'net':
-      return draft.baselineTytNet != null;
+      // Both TYT and AYT nets are optional — a student who hasn't sat either
+      // exam yet still needs to be able to move on.
+      return true;
     case 'tarz':
       return (draft.preferredStyles?.length ?? 0) > 0;
     case 'butce':
@@ -112,16 +114,27 @@ export function clearDraft(): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TRACK_LABELS: Record<Track, { short: string; full: string; hint: string }> = {
-  SAYISAL: { short: 'Sayısal', full: 'Sayısal', hint: 'Mat, Fizik, Kimya, Biyoloji' },
-  ESIT_AGIRLIK: { short: 'Eşit Ağırlık', full: 'Eşit Ağırlık', hint: 'Mat, Edebiyat, Tarih, Coğrafya' },
-  SOZEL: { short: 'Sözel', full: 'Sözel', hint: 'Edebiyat, Tarih, Coğrafya, Felsefe' },
-  DIL: { short: 'Dil', full: 'Dil', hint: 'YDT İngilizce ağırlıklı' },
+  SAYISAL: { short: 'Sayısal', full: 'Sayısal', hint: '' },
+  ESIT_AGIRLIK: { short: 'Eşit Ağırlık', full: 'Eşit Ağırlık', hint: '' },
+  SOZEL: { short: 'Sözel', full: 'Sözel', hint: '' },
+  DIL: { short: 'Dil', full: 'Dil', hint: '' },
 };
 
+// GRADE_11's label covers 9th, 10th and 11th grade together — the underlying
+// value stays GRADE_11 (matching engine and DB are unaffected), only the
+// wording changed to stop implying 9th/10th graders can't use it.
 export const GRADE_LABELS: Record<GradeLevel, { short: string; hint: string }> = {
-  GRADE_11: { short: '11. sınıf', hint: 'Bir yılın daha var' },
-  GRADE_12: { short: '12. sınıf', hint: 'Bu yıl gireceksin' },
-  MEZUN: { short: 'Mezun', hint: 'Tekrar deneyeceksin' },
+  GRADE_11: { short: '9-10-11. sınıf', hint: '' },
+  GRADE_12: { short: '12. sınıf', hint: '' },
+  MEZUN: { short: 'Mezun', hint: '' },
+};
+
+/** e.g. "SAY 890" — [ALAN] [YERLEŞTİRME SIRASI] on coach cards and profiles. */
+export const TRACK_SHORT_CODES: Record<Track, string> = {
+  SAYISAL: 'SAY',
+  ESIT_AGIRLIK: 'EA',
+  SOZEL: 'SÖZ',
+  DIL: 'DİL',
 };
 
 export const STYLE_LABELS: Record<CoachingStyle, { short: string; hint: string }> = {
@@ -144,4 +157,21 @@ export const DIMENSION_LABELS: Record<string, string> = {
 export function formatTry(minor: number | null | undefined): string {
   if (minor == null) return '—';
   return `${Math.round(minor / 100).toLocaleString('tr-TR')} ₺`;
+}
+
+/** "TYT 68 → 108 · AYT 40 → 65 net" — only the exams that have both ends set. */
+export function formatNetJourney(journey: {
+  baselineTytNet: number | null;
+  finalTytNet: number | null;
+  baselineAytNet: number | null;
+  finalAytNet: number | null;
+}): string | null {
+  const parts: string[] = [];
+  if (journey.baselineTytNet != null && journey.finalTytNet != null) {
+    parts.push(`TYT ${Math.round(journey.baselineTytNet)} → ${Math.round(journey.finalTytNet)}`);
+  }
+  if (journey.baselineAytNet != null && journey.finalAytNet != null) {
+    parts.push(`AYT ${Math.round(journey.baselineAytNet)} → ${Math.round(journey.finalAytNet)}`);
+  }
+  return parts.length > 0 ? `${parts.join(' · ')} net` : null;
 }

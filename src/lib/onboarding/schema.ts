@@ -82,7 +82,9 @@ export function isStepComplete(slug: StepSlug, a: OnboardingAnswers): boolean {
       // istiyorum" should not be blocked here.
       return Boolean(a.targetRanking || a.targetDepartment || a.targetUniversity);
     case 'net':
-      return a.baselineTytNet != null;
+      // Both TYT and AYT nets are optional — a student who hasn't sat either
+      // exam yet still needs to be able to move on. Mirrors client-state.ts.
+      return true;
     case 'tarz':
       return a.preferredStyles.length > 0;
     case 'butce':

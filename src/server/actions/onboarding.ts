@@ -12,6 +12,7 @@ import {
 } from '@/lib/onboarding/session';
 import { DIMENSION_LABELS } from '@/lib/onboarding/client-state';
 import type { OnboardingDraft } from '@/lib/onboarding/client-state';
+import type { Track } from '@/lib/matching/types';
 
 /**
  * Server actions for the guest funnel.
@@ -99,8 +100,14 @@ export interface CoachMatchView {
   priceFromMinor: number | null;
   ratingAvg: number;
   ratingCount: number;
-  journey: { baselineNet: number | null; finalNet: number | null; finalRank: number };
-  specializations: string[];
+  journey: {
+    baselineTytNet: number | null;
+    finalTytNet: number | null;
+    baselineAytNet: number | null;
+    finalAytNet: number | null;
+    finalRank: number;
+    track: Track;
+  };
 }
 
 export interface MatchesResult {
@@ -158,11 +165,13 @@ export async function getMatches(limit = 12): Promise<MatchesResult> {
       ratingAvg: coach.stats.ratingAvg,
       ratingCount: coach.stats.ratingCount,
       journey: {
-        baselineNet: coach.journey.baselineNet,
-        finalNet: coach.journey.finalNet,
+        baselineTytNet: coach.journey.baselineTytNet,
+        finalTytNet: coach.journey.finalTytNet,
+        baselineAytNet: coach.journey.baselineAytNet,
+        finalAytNet: coach.journey.finalAytNet,
         finalRank: coach.journey.finalRank,
+        track: coach.journey.track,
       },
-      specializations: coach.specializations.slice(0, 2).map((s) => s.label),
     };
   });
 

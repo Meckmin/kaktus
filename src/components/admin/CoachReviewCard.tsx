@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { approveCoach, rejectCoach, viewDocument } from '@/server/actions/admin';
-import { formatTry } from '@/lib/onboarding/client-state';
+import { formatNetJourney, formatTry } from '@/lib/onboarding/client-state';
 
 interface ReviewCoach {
   id: string;
@@ -14,8 +14,10 @@ interface ReviewCoach {
   yksRank: number;
   yksYear: number;
   yksTrack: string;
-  ownBaselineNet: number | null;
-  ownFinalNet: number | null;
+  ownBaselineTytNet: number | null;
+  ownFinalTytNet: number | null;
+  ownBaselineAytNet: number | null;
+  ownFinalAytNet: number | null;
   createdAt: string;
   user: { name: string | null; email: string | null };
   documents: Array<{ id: string; type: string; mimeType: string; sizeBytes: number }>;
@@ -75,9 +77,12 @@ export function CoachReviewCard({ coach }: { coach: ReviewCoach }) {
         <Fact
           label="Kendi net çıkışı"
           value={
-            coach.ownBaselineNet != null && coach.ownFinalNet != null
-              ? `${Math.round(coach.ownBaselineNet)} → ${Math.round(coach.ownFinalNet)}`
-              : 'Belirtilmemiş'
+            formatNetJourney({
+              baselineTytNet: coach.ownBaselineTytNet,
+              finalTytNet: coach.ownFinalTytNet,
+              baselineAytNet: coach.ownBaselineAytNet,
+              finalAytNet: coach.ownFinalAytNet,
+            }) ?? 'Belirtilmemiş'
           }
         />
       </dl>

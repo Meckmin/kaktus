@@ -7,7 +7,7 @@ import { getCoachCalendar } from '@/lib/booking/availability';
 import { readOfferDraft } from '@/server/actions/offers';
 import { AuthGateProvider } from '@/components/auth/AuthGate';
 import { CoachProfileClient } from '@/components/coach/CoachProfileClient';
-import { STYLE_LABELS, TRACK_LABELS } from '@/lib/onboarding/client-state';
+import { STYLE_LABELS, TRACK_LABELS, TRACK_SHORT_CODES, formatNetJourney } from '@/lib/onboarding/client-state';
 
 /**
  * Coach profile.
@@ -95,10 +95,7 @@ export default async function CoachProfilePage({
 }
 
 function CoachHero({ coach }: { coach: NonNullable<Awaited<ReturnType<typeof getCoachProfile>>> }) {
-  const climbed =
-    coach.journey.baselineNet != null && coach.journey.finalNet != null
-      ? `${Math.round(coach.journey.baselineNet)} → ${Math.round(coach.journey.finalNet)} net`
-      : null;
+  const climbed = formatNetJourney(coach.journey);
 
   return (
     <header>
@@ -129,11 +126,15 @@ function Credentials({
   return (
     <section className="mt-8">
       <dl className="grid gap-px overflow-hidden rounded-2xl border border-stone/70 bg-stone/60 sm:grid-cols-3">
-        <Fact label="YKS sıralaması" value={`${coach.yksRank.toLocaleString('tr-TR')}.`} note={`${coach.yksYear} yılı`} />
+        <Fact
+          label="YKS sıralaması"
+          value={`${TRACK_SHORT_CODES[coach.yksTrack]} ${coach.yksRank.toLocaleString('tr-TR')}`}
+          note={`${coach.yksYear} YKS`}
+        />
         <Fact label="Üniversite" value={coach.university} note={coach.department} />
         <Fact
           label="Öğrenci"
-          value={`${coach.stats.completedEngagements} tamamlanan`}
+          value={`Şu ana kadar ${coach.stats.completedEngagements} öğrenci`}
           note={
             coach.stats.ratingCount > 0
               ? `${coach.stats.ratingAvg.toFixed(1)} puan · ${coach.stats.ratingCount} değerlendirme`
@@ -184,10 +185,6 @@ function Methodology({
             </li>
           ))}
         </ul>
-      )}
-
-      {coach.subjects.length > 0 && (
-        <p className="mt-6 text-sm text-muted">Dersler: {coach.subjects.join(', ')}</p>
       )}
     </section>
   );

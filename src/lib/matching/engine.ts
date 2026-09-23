@@ -29,6 +29,12 @@ const HARD_FILTERS = [
 /** Students see coaches up to 40% over their stated ceiling — they negotiate. */
 const BUDGET_TOLERANCE = 1.4;
 
+/** Sums a TYT/AYT pair into the scorer's combined net index; null if both are unset. */
+function combineNets(tyt: number | null, ayt: number | null): number | null {
+  if (tyt == null && ayt == null) return null;
+  return (tyt ?? 0) + (ayt ?? 0);
+}
+
 export interface MatchOptions {
   limit?: number;
   now?: Date;
@@ -76,8 +82,10 @@ export async function findMatches(
       yksRank: true,
       yksYear: true,
       yksTrack: true,
-      ownBaselineNet: true,
-      ownFinalNet: true,
+      ownBaselineTytNet: true,
+      ownFinalTytNet: true,
+      ownBaselineAytNet: true,
+      ownFinalAytNet: true,
       ownBaselineRank: true,
       wasMezun: true,
       ratingAvg: true,
@@ -123,8 +131,14 @@ export async function findMatches(
       styles: row.styles,
       supportedGrades: row.supportedGrades,
       journey: {
-        baselineNet: row.ownBaselineNet,
-        finalNet: row.ownFinalNet,
+        // Same combined scale as StudentProfile.baseline in score.ts's
+        // baselineNetIndex — sum the two exams, or null if neither is set.
+        baselineNet: combineNets(row.ownBaselineTytNet, row.ownBaselineAytNet),
+        finalNet: combineNets(row.ownFinalTytNet, row.ownFinalAytNet),
+        baselineTytNet: row.ownBaselineTytNet,
+        finalTytNet: row.ownFinalTytNet,
+        baselineAytNet: row.ownBaselineAytNet,
+        finalAytNet: row.ownFinalAytNet,
         baselineRank: row.ownBaselineRank,
         finalRank: row.yksRank,
         wasMezun: row.wasMezun,

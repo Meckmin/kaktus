@@ -148,7 +148,7 @@ function scoreTrajectory(
     const outcomeRatio = clamp01(median / required);
     score = clamp01(score * 0.7 + outcomeRatio * 0.3);
     if (median >= required * 0.8) {
-      reason = `Öğrencileri ortalama ${Math.round(median)} net artış bildirmiş`;
+      reason = `Öğrencileri ortalama ${Math.round(median)} net artışı bildirmiş`;
     }
   }
 
@@ -439,7 +439,9 @@ export function scoreCoach(
   );
 
   const reasons = dimensions
-    .filter((d) => d.surface && d.score >= 0.62 && d.reason)
+    // trackDepth's reason restates the track, which the card already shows on
+    // its own — a real scoring signal, but a redundant headline sentence.
+    .filter((d) => d.surface && d.dimension !== 'trackDepth' && d.score >= 0.62 && d.reason)
     .sort((a, b) => b.score * b.weight - a.score * a.weight)
     .slice(0, 3)
     .map((d) => d.reason);

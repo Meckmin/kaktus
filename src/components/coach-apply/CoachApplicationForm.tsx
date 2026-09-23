@@ -74,7 +74,7 @@ const EMPTY: CoachApplicationInput = {
  */
 const RENDERED_FIELDS: Record<string, string[]> = {
   kimlik: ['university', 'department', 'yksTrack', 'yksRank', 'yksYear', 'graduationYear'],
-  yontem: ['headline', 'bio', 'styles', 'tracks', 'supportedGrades', 'subjects'],
+  yontem: ['headline', 'bio', 'styles', 'tracks', 'supportedGrades'],
   ucret: ['monthlyPriceMinor', 'sessionPriceMinor', 'maxActiveStudents', 'weeklyCapacityHours'],
   takvim: ['availability'],
   odeme: [
@@ -194,14 +194,16 @@ export function CoachApplicationForm({ displayName }: { displayName: string }) {
             </>
           )}
           <span>
-            {stepIndex + 1}. adım, {APPLY_STEPS.length} adımdan
+            {stepIndex + 1}/{APPLY_STEPS.length}
           </span>
         </nav>
 
         <h1 className="mt-6 max-w-measure font-display text-question font-semibold text-balance">
           {APPLY_STEP_TITLES[step]}
         </h1>
-        <p className="mt-3 max-w-[52ch] leading-relaxed text-muted">{APPLY_STEP_HINTS[step]}</p>
+        {APPLY_STEP_HINTS[step] && (
+          <p className="mt-3 max-w-[52ch] leading-relaxed text-muted">{APPLY_STEP_HINTS[step]}</p>
+        )}
 
         <div className="mt-8 space-y-8">
           {step === 'kimlik' && (
@@ -336,7 +338,7 @@ function CredentialsStep({
       </div>
 
       <fieldset>
-        <legend className="mb-3 font-medium">Girdiğin alan</legend>
+        <legend className="mb-3 font-medium">Alan</legend>
         <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
           {(Object.keys(TRACK_LABELS) as Array<keyof typeof TRACK_LABELS>).map((track) => (
             <ChoiceRow
@@ -375,19 +377,37 @@ function CredentialsStep({
       </div>
 
       {/* The trajectory is the strongest matching signal in the product, so it
-          is asked for directly rather than inferred from the ranking alone. */}
+          is asked for directly rather than inferred from the ranking alone —
+          TYT and AYT separately, same as the student side of onboarding. */}
       <div className="grid gap-4 sm:grid-cols-2">
         <NumberField
-          label="Başlangıç netin"
+          label="TYT başlangıç netin"
           hint="Hazırlığa başlarken"
-          value={form.ownBaselineNet ?? null}
-          onChange={(v) => set({ ownBaselineNet: v })}
+          max={120}
+          value={form.ownBaselineTytNet ?? null}
+          onChange={(v) => set({ ownBaselineTytNet: v })}
           suffix="net"
         />
         <NumberField
-          label="Sınavdaki netin"
-          value={form.ownFinalNet ?? null}
-          onChange={(v) => set({ ownFinalNet: v })}
+          label="TYT sınavdaki netin"
+          max={120}
+          value={form.ownFinalTytNet ?? null}
+          onChange={(v) => set({ ownFinalTytNet: v })}
+          suffix="net"
+        />
+        <NumberField
+          label="AYT başlangıç netin"
+          hint="Hazırlığa başlarken"
+          max={80}
+          value={form.ownBaselineAytNet ?? null}
+          onChange={(v) => set({ ownBaselineAytNet: v })}
+          suffix="net"
+        />
+        <NumberField
+          label="AYT sınavdaki netin"
+          max={80}
+          value={form.ownFinalAytNet ?? null}
+          onChange={(v) => set({ ownFinalAytNet: v })}
           suffix="net"
         />
       </div>
@@ -445,7 +465,6 @@ function MethodStep({ form, set, errors }: StepProps) {
       <div>
         <TextField
           label="Tek cümlelik tanıtım"
-          hint="Arama sonuçlarında adının altında görünür"
           value={form.headline}
           onChange={(v) => set({ headline: v ?? '' })}
           placeholder="Mezun yılında 60 binden ilk 5 bine çıktım, aynı yolu tarif ediyorum"
@@ -456,9 +475,7 @@ function MethodStep({ form, set, errors }: StepProps) {
       <div>
         <label className="block">
           <span className="font-medium">Koçluk yaklaşımın</span>
-          <span className="mt-0.5 block text-sm text-muted">
-            Bir öğrenciyle ilk ay ne yaparsın? Somut yaz — öğrenciler en çok burayı okuyor.
-          </span>
+          <span className="mt-0.5 block text-sm text-muted">Öğrencilerinle nasıl çalışırsın?</span>
           <textarea
             value={form.bio}
             onChange={(event) => set({ bio: event.target.value })}
@@ -475,10 +492,10 @@ function MethodStep({ form, set, errors }: StepProps) {
       </div>
 
       <fieldset>
-        <legend className="mb-3 font-medium">Hangi alanlarda ders veriyorsun?</legend>
+        <legend className="mb-3 font-medium">Hangi alanlarda koçluk yapabilirsin?</legend>
         <p className="mb-3 text-sm text-muted">
-          Kendi girdiğin alan işaretli geldi. Birden fazla alanda çalışıyorsan ekleyebilirsin —
-          örneğin EA öğrencilerine matematik veren bir sayısalcıysan.
+          Kendi girdiğin alan zaten işaretlendi. Birden fazla alanda koçluk yapabiliyorsan
+          ekleyebilirsin.
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           {(Object.keys(TRACK_LABELS) as Array<keyof typeof TRACK_LABELS>).map((track) => {
@@ -528,7 +545,7 @@ function MethodStep({ form, set, errors }: StepProps) {
       </fieldset>
 
       <fieldset>
-        <legend className="mb-3 font-medium">Hangi sınıf seviyeleriyle çalışırsın?</legend>
+        <legend className="mb-3 font-medium">Hangi seviyedeki öğrencilerle çalışırsın?</legend>
         <div className="grid gap-2 sm:grid-cols-3">
           {(Object.keys(GRADE_LABELS) as Array<keyof typeof GRADE_LABELS>).map((grade) => (
             <ChoiceRow
@@ -569,31 +586,7 @@ function MethodStep({ form, set, errors }: StepProps) {
             placeholder="5000"
           />
         </div>
-        <div className="mt-4">
-          <TextField
-            label="Uzmanlık başlığı"
-            value={form.specializationLabel ?? null}
-            onChange={(v) => set({ specializationLabel: v })}
-            placeholder="Mezun yılında 60 binden ilk 5 bine"
-          />
-        </div>
       </div>
-
-      <TextField
-        label="Verdiğin dersler"
-        hint="Virgülle ayır"
-        value={(form.subjects ?? []).join(', ')}
-        onChange={(v) =>
-          set({
-            subjects: (v ?? '')
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean)
-              .slice(0, 20),
-          })
-        }
-        placeholder="AYT Matematik, Fizik, TYT Matematik"
-      />
     </>
   );
 }
@@ -693,8 +686,8 @@ function AvailabilityStep({ form, set, errors }: StepProps) {
   return (
     <>
       <p className="max-w-[52ch] leading-relaxed text-muted">
-        Öğrenciler bu saatlerden seans seçer. Ortak müsaitlik eşleşme puanının %15'i —
-        gerçekçi ol, sonradan değiştirebilirsin.
+        Öğrenciler bu saatlerden seans seçer. Ortak müsaitlik eşleşme puanının %15'i buradan
+        geliyor, sonradan değiştirebilirsin.
       </p>
 
       <div className="space-y-2">

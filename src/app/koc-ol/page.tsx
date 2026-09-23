@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import { auth } from '@/lib/auth';
 import { getApplicationStatus } from '@/server/actions/coach-application';
@@ -68,10 +67,7 @@ export default async function CoachApplyPage({
   return (
     <main className="mx-auto max-w-3xl px-6 py-10 sm:px-8">
       <header>
-        <Link href="/" className="text-sm text-muted transition-colors hover:text-cactus">
-          Kaktüs Koçluk
-        </Link>
-        <h1 className="mt-6 max-w-measure font-display text-question font-semibold text-balance">
+        <h1 className="max-w-measure font-display text-question font-semibold text-balance">
           Koç başvurusu
         </h1>
         <p className="mt-3 max-w-[54ch] leading-relaxed text-muted">

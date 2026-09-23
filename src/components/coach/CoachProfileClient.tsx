@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { CalendarDay } from '@/lib/booking/availability';
 import {
   PACKAGE_CONFIG,
@@ -46,8 +46,10 @@ export function CoachProfileClient({
   resumeDraft: OfferDraft | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { require } = useAuthGate();
   const autoSubmitted = useRef(false);
+  const scrolledToComposer = useRef(false);
 
   const defaultPackage: PackageType = resumeDraft?.packageType ?? 'EXPLORATORY';
   const [open, setOpen] = useState(Boolean(resumeDraft));
@@ -121,6 +123,16 @@ export function CoachProfileClient({
     autoSubmitted.current = true;
     void send();
   }, [resumeDraft, authenticated, send]);
+
+  // "Teklif iste" on the match card lands here with ?teklif=1 — open the
+  // composer and bring the calendar into view immediately, instead of making
+  // someone who already said they want to send an offer find it themselves.
+  useEffect(() => {
+    if (searchParams.get('teklif') !== '1' || scrolledToComposer.current) return;
+    scrolledToComposer.current = true;
+    setOpen(true);
+    document.getElementById('takvim')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [searchParams]);
 
   const startOffer = (packageType: PackageType) => {
     const suggested = suggestedPriceMinor(packageType, coach.pricingTiers);

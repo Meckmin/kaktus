@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import type { Track } from '@/lib/matching/types';
 
 /**
  * Coach profile read model.
@@ -29,8 +30,15 @@ export interface CoachProfileView {
   graduationYear: number | null;
   yksRank: number;
   yksYear: number;
+  yksTrack: Track;
   verifiedAt: Date | null;
-  journey: { baselineNet: number | null; finalNet: number | null; wasMezun: boolean };
+  journey: {
+    baselineTytNet: number | null;
+    finalTytNet: number | null;
+    baselineAytNet: number | null;
+    finalAytNet: number | null;
+    wasMezun: boolean;
+  };
   tracks: string[];
   subjects: string[];
   styles: string[];
@@ -81,10 +89,13 @@ export async function getCoachProfile(slug: string): Promise<CoachProfileView | 
       graduationYear: true,
       yksRank: true,
       yksYear: true,
+      yksTrack: true,
       verificationStatus: true,
       verifiedAt: true,
-      ownBaselineNet: true,
-      ownFinalNet: true,
+      ownBaselineTytNet: true,
+      ownFinalTytNet: true,
+      ownBaselineAytNet: true,
+      ownFinalAytNet: true,
       wasMezun: true,
       tracks: true,
       subjects: true,
@@ -159,10 +170,13 @@ export async function getCoachProfile(slug: string): Promise<CoachProfileView | 
     graduationYear: coach.graduationYear,
     yksRank: coach.yksRank,
     yksYear: coach.yksYear,
+    yksTrack: coach.yksTrack,
     verifiedAt: coach.verifiedAt,
     journey: {
-      baselineNet: coach.ownBaselineNet,
-      finalNet: coach.ownFinalNet,
+      baselineTytNet: coach.ownBaselineTytNet,
+      finalTytNet: coach.ownFinalTytNet,
+      baselineAytNet: coach.ownBaselineAytNet,
+      finalAytNet: coach.ownFinalAytNet,
       wasMezun: coach.wasMezun,
     },
     tracks: coach.tracks,

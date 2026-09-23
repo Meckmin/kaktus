@@ -210,9 +210,9 @@ model User {
   coachProfile       CoachProfile?
   onboardingSessions OnboardingSession[]
   messages           Message[]
-  auditLogs          AuditLog[]           @relation("AuditActor")
+  auditLogs          AuditLog[]          @relation("AuditActor")
   offerEvents        OfferEvent[]
-  disputesOpened     Dispute[]            @relation("DisputeOpener")
+  disputesOpened     Dispute[]           @relation("DisputeOpener")
 
   @@index([createdAt])
 }
@@ -344,12 +344,12 @@ model CoachProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  slug         String  @unique
-  headline     String
-  bio          String  @db.Text
+  slug          String  @unique
+  headline      String
+  bio           String  @db.Text
   introVideoUrl String?
-  city         String?
-  timezone     String  @default("Europe/Istanbul")
+  city          String?
+  timezone      String  @default("Europe/Istanbul")
 
   // Credentials
   university     String
@@ -359,33 +359,37 @@ model CoachProfile {
   yksYear        Int
   yksTrack       Track
 
-  // Personal trajectory — the core matching signal
-  ownBaselineNet Float?
-  ownFinalNet    Float?
-  ownBaselineRank Int?
-  wasMezun       Boolean @default(false)
+  // Personal trajectory — the core matching signal. Split by exam (TYT/AYT)
+  // rather than one combined number, mirroring StudentProfile's baseline nets —
+  // the matcher sums them back into one index (see lib/matching/engine.ts).
+  ownBaselineTytNet Float?
+  ownFinalTytNet    Float?
+  ownBaselineAytNet Float?
+  ownFinalAytNet    Float?
+  ownBaselineRank   Int?
+  wasMezun          Boolean @default(false)
 
   // Supply configuration
-  tracks           Track[]
-  subjects         String[] // ["AYT Matematik", "TYT Türkçe", …]
-  styles           CoachingStyle[]
-  supportedGrades  GradeLevel[]
-  maxActiveStudents Int           @default(10)
+  tracks                Track[]
+  subjects              String[] // ["AYT Matematik", "TYT Türkçe", …]
+  styles                CoachingStyle[]
+  supportedGrades       GradeLevel[]
+  maxActiveStudents     Int             @default(10)
   /// Hours per week the coach can actually give. Distinct from student count:
   /// ten students at 30 minutes is a different business from three at 2 hours.
-  weeklyCapacityHours Int?
-  acceptingStudents Boolean       @default(true)
+  weeklyCapacityHours   Int?
+  acceptingStudents     Boolean         @default(true)
   /// Commission override in basis points; null = use platform default.
   commissionBpsOverride Int?
 
   // Denormalised stats — recomputed by job, never trusted for money
-  ratingAvg              Float    @default(0)
-  ratingCount            Int      @default(0)
-  completedEngagements   Int      @default(0)
-  activeEngagements      Int      @default(0)
-  responseP50Seconds     Int?
-  cancellationRate       Float    @default(0)
-  lastActiveAt           DateTime @default(now())
+  ratingAvg            Float    @default(0)
+  ratingCount          Int      @default(0)
+  completedEngagements Int      @default(0)
+  activeEngagements    Int      @default(0)
+  responseP50Seconds   Int?
+  cancellationRate     Float    @default(0)
+  lastActiveAt         DateTime @default(now())
 
   verificationStatus VerificationStatus @default(DRAFT)
   verificationNote   String?
@@ -393,25 +397,25 @@ model CoachProfile {
   suspendedAt        DateTime?
 
   /// Iyzico alt üye işyeri key. Payouts are impossible without it.
-  submerchantKey    String?
-  payoutReadyAt     DateTime?
+  submerchantKey String?
+  payoutReadyAt  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  specializations  CoachSpecialization[]
-  documents        VerificationDocument[]
-  pricingTiers     PricingTier[]
-  availabilityRules AvailabilityRule[]
+  specializations        CoachSpecialization[]
+  documents              VerificationDocument[]
+  pricingTiers           PricingTier[]
+  availabilityRules      AvailabilityRule[]
   availabilityExceptions AvailabilityException[]
-  holds            SlotHold[]
-  bookings         Booking[]
-  conversations    Conversation[]
-  offers           Offer[]
-  engagements      Engagement[]
-  payouts          Payout[]
-  reviews          Review[]
-  payoutProfile    CoachPayoutProfile?
+  holds                  SlotHold[]
+  bookings               Booking[]
+  conversations          Conversation[]
+  offers                 Offer[]
+  engagements            Engagement[]
+  payouts                Payout[]
+  reviews                Review[]
+  payoutProfile          CoachPayoutProfile?
 
   @@index([verificationStatus, acceptingStudents])
   @@index([yksRank])
@@ -433,18 +437,18 @@ model CoachPayoutProfile {
   coachProfileId String       @unique
   coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
 
-  submerchantType String // PERSONAL | PRIVATE_COMPANY | LIMITED_COMPANY
-  legalName       String
+  submerchantType   String // PERSONAL | PRIVATE_COMPANY | LIMITED_COMPANY
+  legalName         String
   /// Ciphertext. Never selected outside the sub-merchant registration path.
-  ibanEncrypted   Bytes?
+  ibanEncrypted     Bytes?
   /// Last four digits, for "IBAN ****4521" in the admin UI without decrypting.
-  ibanLast4       String?
+  ibanLast4         String?
   /// TCKN (personal) or VKN (company), ciphertext.
   identityEncrypted Bytes?
-  taxOffice       String?
-  address         String
-  city            String
-  phone           String
+  taxOffice         String?
+  address           String
+  city              String
+  phone             String
 
   purgedAt  DateTime?
   createdAt DateTime  @default(now())
@@ -456,11 +460,11 @@ model CoachSpecialization {
   coachProfileId String
   coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
 
-  label     String // "Mezunlukta 50binden ilk 1000'e"
-  slug      String
+  label    String // "Mezunlukta 50binden ilk 1000'e"
+  slug     String
   /// Optional structured rank band this specialization claims to serve.
-  fromRank  Int?
-  toRank    Int?
+  fromRank Int?
+  toRank   Int?
 
   @@unique([coachProfileId, slug])
   @@index([slug])
@@ -562,8 +566,8 @@ model SlotHold {
   /// in a GiST index when it needs no timezone-dependent cast — a plain
   /// `timestamp` column makes the cast STABLE rather than IMMUTABLE and
   /// Postgres refuses to build the index at all.
-  startsAt  DateTime @db.Timestamptz(3)
-  endsAt    DateTime @db.Timestamptz(3)
+  startsAt  DateTime   @db.Timestamptz(3)
+  endsAt    DateTime   @db.Timestamptz(3)
   status    HoldStatus @default(HELD)
   expiresAt DateTime
   createdAt DateTime   @default(now())
@@ -588,16 +592,16 @@ model Booking {
 
   /// timestamptz — see the note on SlotHold.startsAt; Booking's exclusion
   /// constraint has the same requirement.
-  startsAt DateTime @db.Timestamptz(3)
-  endsAt   DateTime @db.Timestamptz(3)
+  startsAt DateTime      @db.Timestamptz(3)
+  endsAt   DateTime      @db.Timestamptz(3)
   status   BookingStatus @default(SCHEDULED)
 
-  meetingUrl        String?
-  coachConfirmedAt  DateTime?
+  meetingUrl         String?
+  coachConfirmedAt   DateTime?
   studentConfirmedAt DateTime?
-  cancelledByRole   ActorRole?
-  cancelReason      String?
-  notes             String?   @db.Text
+  cancelledByRole    ActorRole?
+  cancelReason       String?
+  notes              String?    @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -642,7 +646,7 @@ model Message {
   sender   User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   /// What both parties see. This is the column Realtime publishes.
-  body String @db.Text
+  body                  String @db.Text
   /// Original text, retained encrypted for dispute evidence. Admin-only reads.
   bodyOriginalEncrypted Bytes?
 
@@ -691,15 +695,15 @@ model Offer {
   studentProfileId String
   student          StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
 
-  initiatorRole ActorRole
+  initiatorRole     ActorRole
   basePricingTierId String?
   basePricingTier   PricingTier? @relation(fields: [basePricingTierId], references: [id], onDelete: SetNull)
 
-  title    String
+  title         String
   /// { sessionsPerCycle, minutesPerSession, cadence, weeks, deliverables[], notes }
-  scope    Json
-  priceMinor Int
-  currency   String @default("TRY")
+  scope         Json
+  priceMinor    Int
+  currency      String @default("TRY")
   /// Snapshotted at creation — a later platform-wide change must not alter
   /// the economics of an already-signed offer.
   commissionBps Int
@@ -708,11 +712,11 @@ model Offer {
   endDate        DateTime
   milestoneCount Int      @default(4)
 
-  status  OfferStatus @default(DRAFT)
-  version Int         @default(1)
+  status        OfferStatus @default(DRAFT)
+  version       Int         @default(1)
   parentOfferId String?
-  parentOffer   Offer?  @relation("OfferChain", fields: [parentOfferId], references: [id], onDelete: SetNull)
-  counterOffers Offer[] @relation("OfferChain")
+  parentOffer   Offer?      @relation("OfferChain", fields: [parentOfferId], references: [id], onDelete: SetNull)
+  counterOffers Offer[]     @relation("OfferChain")
 
   expiresAt   DateTime
   acceptedAt  DateTime?
@@ -773,12 +777,12 @@ model Engagement {
   createdAt   DateTime  @default(now())
   completedAt DateTime?
 
-  milestones   Milestone[]
-  bookings     Booking[]
-  disputes     Dispute[]
+  milestones    Milestone[]
+  bookings      Booking[]
+  disputes      Dispute[]
   ledgerEntries LedgerEntry[]
-  refunds      Refund[]
-  review       Review?
+  refunds       Refund[]
+  review        Review?
 
   @@index([coachProfileId, status])
   @@index([studentProfileId, status])
@@ -794,7 +798,7 @@ model Milestone {
   periodEnd   DateTime
   amountMinor Int
 
-  status             MilestoneStatus @default(SCHEDULED)
+  status MilestoneStatus @default(SCHEDULED)
 
   /// Iyzico `paymentTransactionId` for this milestone's basket item.
   /// Approve and refund both operate on this handle, not on the payment — it
@@ -867,14 +871,14 @@ model LedgerEntry {
   amountMinor  Int
   currency     String          @default("TRY")
 
-  engagementId String?
-  engagement   Engagement? @relation(fields: [engagementId], references: [id], onDelete: SetNull)
-  milestoneId  String?
-  milestone    Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
-  paymentId    String?
-  payment      Payment?    @relation(fields: [paymentId], references: [id], onDelete: SetNull)
-  payoutId     String?
-  payout       Payout?     @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  engagementId   String?
+  engagement     Engagement? @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  milestoneId    String?
+  milestone      Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  paymentId      String?
+  payment        Payment?    @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  payoutId       String?
+  payout         Payout?     @relation(fields: [payoutId], references: [id], onDelete: SetNull)
   coachProfileId String?
 
   description String
@@ -915,17 +919,17 @@ model Dispute {
   milestoneId  String?
   milestone    Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
 
-  openedById String
-  openedBy   User      @relation("DisputeOpener", fields: [openedById], references: [id], onDelete: Restrict)
+  openedById   String
+  openedBy     User      @relation("DisputeOpener", fields: [openedById], references: [id], onDelete: Restrict)
   openedByRole ActorRole
 
-  reason      String
-  detail      String        @db.Text
-  evidence    Json?
-  status      DisputeStatus @default(OPEN)
-  resolution  String?
-  resolvedById String?
-  resolvedAt  DateTime?
+  reason          String
+  detail          String        @db.Text
+  evidence        Json?
+  status          DisputeStatus @default(OPEN)
+  resolution      String?
+  resolvedById    String?
+  resolvedAt      DateTime?
   /// For RESOLVED_SPLIT: how much of the milestone goes to the coach.
   coachShareMinor Int?
 
@@ -941,14 +945,14 @@ model Review {
   engagementId String     @unique
   engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
 
-  coachProfileId String
-  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+  coachProfileId   String
+  coach            CoachProfile   @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
   studentProfileId String
   student          StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
 
-  rating    Int // 1..5, checked in SQL
-  body      String? @db.Text
-  published Boolean @default(true)
+  rating          Int // 1..5, checked in SQL
+  body            String? @db.Text
+  published       Boolean @default(true)
   /// Net gain reported at the end of the engagement — feeds trajectory scoring.
   netGainReported Float?
 
@@ -983,9 +987,9 @@ model Refund {
   paymentTransactionId String?
   milestoneId          String?
 
-  idempotencyKey String  @unique
+  idempotencyKey String   @unique
   providerRef    String?
-  attempts       Int     @default(0)
+  attempts       Int      @default(0)
   lastError      String?
   nextAttemptAt  DateTime @default(now())
 
@@ -1047,20 +1051,20 @@ model MatchRun {
   onboardingSession   OnboardingSession? @relation(fields: [onboardingSessionId], references: [id], onDelete: SetNull)
   studentProfileId    String?
 
-  weightsVersion  String
-  candidateCount  Int
+  weightsVersion String
+  candidateCount Int
   /// [{ coachProfileId, rawScore, displayScore, position, reasons[] }]
-  results         Json
-  latencyMs       Int
-  createdAt       DateTime @default(now())
+  results        Json
+  latencyMs      Int
+  createdAt      DateTime @default(now())
 
   @@index([weightsVersion, createdAt])
 }
 
 model AuditLog {
-  id       String     @id @default(cuid())
-  actorId  String?
-  actor    User?      @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  id        String    @id @default(cuid())
+  actorId   String?
+  actor     User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
   actorRole ActorRole @default(SYSTEM)
 
   action     String // "offer.transition", "coach.approve", "payout.submit"

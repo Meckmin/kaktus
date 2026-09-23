@@ -37,6 +37,10 @@ function coach(overrides: Partial<CoachCandidate> = {}): CoachCandidate {
     journey: {
       baselineNet: 72,
       finalNet: 98,
+      baselineTytNet: 43,
+      finalTytNet: 59,
+      baselineAytNet: 29,
+      finalAytNet: 39,
       baselineRank: 48_000,
       finalRank: 3_100,
       wasMezun: true,

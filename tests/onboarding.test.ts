@@ -23,14 +23,11 @@ describe('step gating', () => {
     expect(isStepComplete('hedef', { ...base, targetDepartment: 'Tıp' })).toBe(true);
   });
 
-  it('treats AYT net as optional and TYT net as required', () => {
+  it('treats both TYT and AYT net as optional', () => {
+    // A student who hasn't sat either exam yet must not be stuck here.
+    expect(isStepComplete('net', { ...base })).toBe(true);
     expect(isStepComplete('net', { ...base, baselineTytNet: 55 })).toBe(true);
-    expect(isStepComplete('net', { ...base, baselineAytNet: 20 })).toBe(false);
-  });
-
-  it('treats zero as an answer, not as missing', () => {
-    // The classic falsy-check bug: a student genuinely at 0 net gets stuck.
-    expect(isStepComplete('net', { ...base, baselineTytNet: 0 })).toBe(true);
+    expect(isStepComplete('net', { ...base, baselineAytNet: 20 })).toBe(true);
   });
 
   it('resumes at the first gap rather than the last step touched', () => {
@@ -75,6 +72,10 @@ describe('match pills', () => {
     journey: {
       baselineNet: 72,
       finalNet: 98,
+      baselineTytNet: 43,
+      finalTytNet: 59,
+      baselineAytNet: 29,
+      finalAytNet: 39,
       baselineRank: 48_000,
       finalRank: 3100,
       wasMezun: true,

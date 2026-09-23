@@ -128,6 +128,24 @@ export function toMatchInput(
 }
 
 /**
+ * Retries the claim using whatever onboarding cookie is on the current
+ * request, for callers that find an authenticated user with no StudentProfile
+ * and want to recover before giving up.
+ *
+ * `events.signIn` in `lib/auth.ts` is the primary place this happens, but it
+ * runs inside NextAuth's own callback handling, where exactly when the
+ * cookie is visible is NextAuth's implementation detail, not ours to fully
+ * rely on. The cookie itself outlives any single request — it's set for 30
+ * days — so retrying here, on the next request that actually needs the
+ * profile to exist, recovers a claim that the sign-in event's timing missed.
+ */
+export async function claimOnboardingSessionFromCookie(userId: string) {
+  const token = (await cookies()).get(ONBOARDING_COOKIE)?.value;
+  if (!token) return null;
+  return claimOnboardingSession(token, userId);
+}
+
+/**
  * Binds a guest session to a freshly authenticated user.
  *
  * Idempotent and additive: called on every sign-in, it will not overwrite a

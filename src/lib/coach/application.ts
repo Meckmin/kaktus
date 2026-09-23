@@ -23,7 +23,7 @@ export const APPLY_STEP_HINTS: Record<ApplyStep, string> = {
   kimlik: 'Sıralaman doğrulanmadan profilin yayına alınmıyor.',
   yontem: 'Öğrenciler en çok bu bölümü okuyup karar veriyor.',
   ucret: 'Sonradan değiştirebilirsin. Öğrenciler yine de kendi teklifini gönderebilir.',
-  takvim: 'Sadece kesin müsait olduğun saatleri işaretle.',
+  takvim: '',
   odeme: 'Bu bilgiler yalnızca ödeme kuruluşuna iletilir; öğrenciler görmez.',
 };
 
@@ -45,8 +45,10 @@ export const coachApplicationSchema = z.object({
   yksTrack: trackEnum,
   yksRank: z.number().int().min(1, 'Sıralama gerekli').max(3_000_000),
   yksYear: z.number().int().min(2000).max(2100),
-  ownBaselineNet: z.number().min(0).max(200).nullable().optional(),
-  ownFinalNet: z.number().min(0).max(200).nullable().optional(),
+  ownBaselineTytNet: z.number().min(0).max(120).nullable().optional(),
+  ownFinalTytNet: z.number().min(0).max(120).nullable().optional(),
+  ownBaselineAytNet: z.number().min(0).max(80).nullable().optional(),
+  ownFinalAytNet: z.number().min(0).max(80).nullable().optional(),
   wasMezun: z.boolean().default(false),
 
   // ── Method ──

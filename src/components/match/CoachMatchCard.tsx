@@ -1,6 +1,6 @@
 'use client';
 
-import { DIMENSION_LABELS, formatTry } from '@/lib/onboarding/client-state';
+import { DIMENSION_LABELS, TRACK_SHORT_CODES, formatNetJourney, formatTry } from '@/lib/onboarding/client-state';
 import type { CoachMatchView } from '@/server/actions/onboarding';
 import { useAuthGate } from '@/components/auth/AuthGate';
 
@@ -49,14 +49,11 @@ export function CoachMatchCard({
           </p>
           {coach.journey.finalRank && (
             <p className="mt-1 text-sm text-muted">
-              YKS {coach.journey.finalRank.toLocaleString('tr-TR')}. sıra
-              {coach.journey.baselineNet != null && coach.journey.finalNet != null && (
+              {TRACK_SHORT_CODES[coach.journey.track]} {coach.journey.finalRank.toLocaleString('tr-TR')}
+              {formatNetJourney(coach.journey) && (
                 <>
                   {' · '}
-                  <span className="tabular-nums text-ink">
-                    {Math.round(coach.journey.baselineNet)} → {Math.round(coach.journey.finalNet)}{' '}
-                    net
-                  </span>
+                  <span className="tabular-nums text-ink">{formatNetJourney(coach.journey)}</span>
                 </>
               )}
             </p>
@@ -78,10 +75,6 @@ export function CoachMatchCard({
       )}
 
       <MatchBreakdown coach={coach} limit={featured ? 5 : 3} />
-
-      {coach.specializations.length > 0 && featured && (
-        <p className="mt-4 text-sm text-muted">{coach.specializations.join(' · ')}</p>
-      )}
 
       {coach.caveats.length > 0 && (
         <p className="mt-4 rounded-lg border border-dust/50 bg-dust/10 px-3.5 py-2.5 text-sm leading-snug text-muted">
