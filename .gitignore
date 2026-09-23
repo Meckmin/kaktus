@@ -15,3 +15,6 @@ coverage/
 # Notification emails written by the local delivery fallback (src/lib/email.ts).
 .notifications-log.txt
 .private-uploads/
+
+# claude code local settings
+.claude/
