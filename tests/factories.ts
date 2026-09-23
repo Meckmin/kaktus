@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/db';
 import type { OfferScope } from '@/lib/offers/scope';
+import { createOffer, transitionOffer } from '@/server/services/offer-service';
 
 /**
  * Test fixtures.
@@ -93,6 +94,76 @@ export function scope(overrides: Partial<OfferScope> = {}): OfferScope {
     slots: [slot(0)],
     ...overrides,
   };
+}
+
+/**
+ * Fixture engagement window: started a day ago, a 28-day span — relative to
+ * whenever the suite actually runs, not a fixed calendar date. See
+ * `tests/concurrency.integration.test.ts` for why this can't be hardcoded.
+ */
+export const ENGAGEMENT_START = new Date(Date.now() - 24 * 60 * 60 * 1000);
+export const ENGAGEMENT_END = new Date(Date.now() + 27 * 24 * 60 * 60 * 1000);
+
+/**
+ * A fully paid, active engagement: offer created, accepted, paid, escrow
+ * funded, engagement started. Milestones come back in `SCHEDULED` status,
+ * exactly as a coach or student would find them mid-program.
+ */
+export async function fundedEngagement(
+  opts: {
+    milestoneCount?: number;
+    slots?: Array<{ startsAt: Date; endsAt: Date }>;
+    priceMinor?: number;
+  } = {},
+) {
+  const { coach } = await makeCoach();
+  const { user: studentUser, student } = await makeStudent();
+  const conversation = await makeConversation(coach.id, student.id);
+  const coachUser = await prisma.user.findFirstOrThrow({
+    where: { coachProfile: { id: coach.id } },
+  });
+
+  const priceMinor = opts.priceMinor ?? 400_000;
+  const milestoneCount = opts.milestoneCount ?? 4;
+  const slots = opts.slots ?? [slot(0)];
+
+  const offer = await createOffer({
+    conversationId: conversation.id,
+    coachProfileId: coach.id,
+    studentProfileId: student.id,
+    initiatorRole: 'STUDENT',
+    actorId: studentUser.id,
+    actorProfileId: student.id,
+    title: 'Aylık koçluk',
+    scope: scope({ slots }),
+    priceMinor,
+    startDate: ENGAGEMENT_START,
+    endDate: ENGAGEMENT_END,
+    milestoneCount,
+  });
+
+  await transitionOffer({
+    offerId: offer.id,
+    event: 'ACCEPT',
+    actor: 'COACH',
+    actorId: coachUser.id,
+    actorProfileId: coach.id,
+  });
+  await capturePayment(offer.id, priceMinor);
+  await transitionOffer({ offerId: offer.id, event: 'PAYMENT_CAPTURED', actor: 'SYSTEM' });
+  await transitionOffer({
+    offerId: offer.id,
+    event: 'ENGAGEMENT_STARTED',
+    actor: 'SYSTEM',
+    metadata: {},
+  });
+
+  const engagement = await prisma.engagement.findUniqueOrThrow({
+    where: { offerId: offer.id },
+    include: { milestones: { orderBy: { index: 'asc' } } },
+  });
+
+  return { coach, coachUser, student, studentUser, conversation, offer, engagement };
 }
 
 /** Captures a payment for an offer, as the provider webhook would. */

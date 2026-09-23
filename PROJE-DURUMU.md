@@ -216,52 +216,110 @@ Along the way we checked the parts where being wrong is expensive:
   the site from building, and six links pointing at pages that did not exist yet —
   including the page a student lands on *after successfully paying*. All fixed.
 
+### Stage eleven — The middle, actually built
+
+Everything the last version of this document called "the biggest gap" now exists and
+has been used, live, by a real test account.
+
+Students and coaches now have one shared screen per conversation — messages and the
+offer being discussed sit together, because "can we do 2,700?" means nothing three
+scrolls away from the 3,000 it refers to. From that same screen either side can
+accept, counter, or walk away from an offer, pay once it is accepted, and — this is
+the part that was genuinely missing — once lessons are underway, the coach marks a
+period as taught, the student approves the payout (or it releases itself after five
+days of silence, exactly as designed), and either side can raise a problem, which
+freezes the money and puts it in front of a person rather than an algorithm.
+
+That last piece — the admin screen for actually deciding a dispute — is built too:
+release the money, refund it, or split it, with a written reason every time, because
+aggressively disputed cases are exactly the ones a court might ask about later.
+
+Once a programme finishes, the student is asked, once, for a rating and a note — the
+same review that shows up on the coach's public page. Coaches can now see what they
+have earned and what has already been paid out, in plain currency, on their own
+dashboard.
+
+### Stage twelve — Telling people things happened
+
+None of stage eleven means anything if nobody hears about it. A coach who is not told
+"you have an offer" has to keep checking the site by hand, which is exactly the kind
+of friction that makes a two-sided marketplace fail. Every meaningful moment — an
+offer arriving, being accepted, paid, disputed, or resolved — now sends an email to
+whoever needs to see it. Locally, and until a mail account is connected, it prints to
+a file instead of vanishing into a test inbox nobody reads; the moment a real mail
+provider is configured, the same code sends real email, unchanged.
+
+### Stage thirteen — Finding out what actually happens when this runs for real
+
+This is the stage worth reading carefully, because it changes what "the previous
+version of this document said" is worth.
+
+Section 3 of the earlier version of this document said, in effect, "the logic has
+been checked, but none of it has ever run against a real database." That sentence was
+more true, and more dangerous, than anyone realised. When it was finally run for
+real — a genuine attempt to start the whole system from nothing, the way a new
+server or a new laptop would — it could not. The very first step failed.
+
+Chasing that down surfaced something serious: **the database rule that makes double-
+booking a coach impossible had never actually been switched on, in any copy of this
+project, ever.** It was written, it looked correct, and it silently failed to install
+every single time — which means every earlier claim in this document that "the same
+hour can never be booked twice" was true in the code's intent but not, until now, true
+in practice. Five more errors of the same shape came out of the same exercise: a
+payment-confirmation step that looked up an account before it existed, a safety check
+that compared two different kinds of status against each other and always lost, and a
+dispute button that failed on the very first person who ever pressed it, because the
+act of opening a dispute made the system think a dispute was already open.
+
+Every one of those is fixed now, and — this is the important part — **proven** fixed:
+there is now an automated test suite that actually starts a database from nothing,
+runs the system through the exact situations that used to break it (two people
+booking the same hour at once, a payment confirmation racing a refund, a coach's
+no-show disputed mid-payout), and checks the outcome. It runs automatically every
+time code changes, on GitHub's own machines, not just on the computer that wrote it.
+As of today it passes completely — the first time in this project's history that
+sentence has been true.
+
+The code now also lives on GitHub properly, with that automated check running on
+every change, rather than sitting only on one laptop.
+
 ---
 
 ## 3. Where things stand honestly
 
-**Working and checked:** the matching system, the agreement rules, the money handling
-and escrow logic, the payment integration, the student questionnaire and results, coach
-profiles with calendars, the offer builder, the coach application, and the message filter.
+**Working, run for real, and now proven under automated testing:** the matching
+system, the agreement rules end to end (offer, negotiate, accept, pay), the money
+handling and escrow logic including weekly payout and disputes, the payment
+integration, the student questionnaire and results, coach profiles with calendars, the
+offer builder, the coach application, the message filter, the negotiation/chat screen,
+milestone payouts, dispute resolution, reviews, coach earnings, and the email
+notifications that tell people any of this happened. All of it has been used, live, by
+a real test student and a real test coach account — not just read for errors.
 
-**Built but never actually run:** all of it. The development environment used to build
-this has no internet access and no database, so while the logic has been tested in
-isolation and the code has been checked for errors, **nothing has been loaded in a real
-browser against a real database yet.** Expect some rough edges on the first run.
+**Not built yet, on purpose:** an automated way to actually move money out to a
+coach's bank account on a schedule — this exists and has been tested, but is
+deliberately still a manual trigger rather than an automatic one, because doing it
+automatically needs a proper job queue (so a failed transfer is retried and never
+silently lost), and building that queue before there is real money to move would be
+solving a problem we do not have yet.
 
-**Not built yet:** the chat and negotiation screen, the coach's own dashboard for
-accepting offers, the admin review tools, and the detailed calendar editor.
+**Thinner than it should be:** the individual actions a button click triggers (send
+this message, accept this offer, and so on) are not directly covered by the automated
+tests — the machinery underneath them is, thoroughly, but a mistake made specifically
+in the thin layer connecting a button to that machinery could still slip through.
+Closing this is next on the list.
 
 ---
 
 ## 4. What to do next
 
-### Immediately — get it running
+### Right now — close the remaining test gap
 
-Install it, connect a database, and open it in a browser. Walk through it as a student:
-answer the questions, look at your matches, open a coach, build an offer, sign in.
-Then as a coach: apply, and see the status page.
-
-Send me anything that breaks. Fixing errors from a description is something this process
-has already done well twice.
-
-One thing to be careful about: there is a specific database setup step that must be run,
-which installs the protections preventing double-booking and accounting errors. If it is
-skipped, everything will *appear* to work perfectly and then double-book a coach in
-production. It is written down in the setup instructions.
-
-### Next — the missing middle
-
-The biggest gap is the **negotiation screen**: where a student and coach message each
-other, counter-offers get made, and a deal is accepted. Right now a student can send an
-offer but neither side has a place to talk about it. This is the single most valuable
-thing to build next.
-
-Right after that, the **coach's dashboard** — accepting, countering, managing students.
-
-Then the **admin tools** for reviewing coach applications and handling disputes. These
-can be rough at first; you can do them by hand for the first dozen coaches, and you will
-learn what the tools actually need to do by doing it manually.
+The one honest weak spot left, described in section 3: write automated checks for the
+button-to-database layer itself, not just the logic underneath it. Not urgent — nothing
+is currently known to be broken there — but it is the difference between "we would
+probably notice" and "we are sure we would notice" if someone changed that layer
+carelessly six months from now.
 
 ### Before taking real money
 
@@ -273,6 +331,10 @@ learn what the tools actually need to do by doing it manually.
 - Decide how document verification actually works day to day — who checks them, against
   what standard, how fast.
 - Move the encryption of sensitive data to a proper key-management service.
+- Connect a real mail account so the notifications built in stage twelve actually
+  reach people, instead of printing to a local file.
+- Build the proper job queue mentioned in section 3, so payouts to coaches can run
+  on a schedule instead of a manual trigger.
 
 ### Decisions that need you, not me
 
@@ -288,4 +350,6 @@ learn what the tools actually need to do by doing it manually.
 
 ---
 
-*Last updated after the route and code-quality pass.*
+*Last updated after the negotiation/payments/disputes build-out, the database
+audit that found and fixed the double-booking and payment-ordering bugs, and moving
+the project onto GitHub with automated testing on every change.*

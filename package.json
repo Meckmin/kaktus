@@ -13,7 +13,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "test": "vitest run tests/core.test.ts tests/iyzico.test.ts tests/onboarding.test.ts tests/rate-limit.test.ts",
-    "test:integration": "vitest run tests/concurrency.integration.test.ts",
+    "test:integration": "vitest run tests/concurrency.integration.test.ts tests/actions.integration.test.ts",
     "test:watch": "vitest",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d",
     "test:db:down": "docker compose -f docker-compose.test.yml down -v",
