@@ -63,7 +63,7 @@ Each context owns its tables. Cross-context reads go through a service function 
 
 ```
 /  ──► "Öğrenciyim"  ──►  /onboarding  (5 steps, no auth)
-                              │  POST /api/onboarding  → OnboardingSession row
+                              │  saveOnboardingStep()  → OnboardingSession row
                               │  httpOnly signed cookie kk_onb=<token>, 30d
                               ▼
                           /kocbul  ── server-side match ──► ranked cards
