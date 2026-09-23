@@ -83,9 +83,7 @@ function buildRows(draft: OnboardingDraft): Record<StepSlug, string | null> {
 
   const target = draft.targetRanking
     ? `İlk ${draft.targetRanking.toLocaleString('tr-TR')}`
-    : draft.targetUniversity
-      ? draft.targetUniversity
-      : null;
+    : draft.targetUniversity || draft.targetDepartment || null;
 
   const nets =
     draft.baselineTytNet != null

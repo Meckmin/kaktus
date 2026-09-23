@@ -59,7 +59,13 @@ export function isStepComplete(draft: OnboardingDraft, slug: StepSlug): boolean 
     case 'alan':
       return Boolean(draft.track && draft.gradeLevel);
     case 'hedef':
-      return draft.targetRanking != null || Boolean(draft.targetUniversity);
+      // A ranking or a named target — a student who only knows "Tıp istiyorum"
+      // must not be blocked here.
+      return (
+        draft.targetRanking != null ||
+        Boolean(draft.targetUniversity?.trim()) ||
+        Boolean(draft.targetDepartment?.trim())
+      );
     case 'net':
       // Both TYT and AYT nets are optional — a student who hasn't sat either
       // exam yet still needs to be able to move on.

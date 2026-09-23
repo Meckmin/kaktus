@@ -1,60 +1,77 @@
 import { describe, expect, it } from 'vitest';
 import {
   STEPS,
-  firstIncompleteStep,
+  STEP_TITLES,
   isStepComplete,
-  formatRanking,
+  formatNetJourney,
   formatTry,
-  type OnboardingAnswers,
-} from '@/lib/onboarding/schema';
+  type OnboardingDraft,
+} from '@/lib/onboarding/client-state';
 import { toCoachCard } from '@/lib/matching/present';
 import type { CoachCandidate, MatchResult } from '@/lib/matching/types';
 
-const base: OnboardingAnswers = { preferredStyles: [] };
+const base: OnboardingDraft = { preferredStyles: [] };
 
 describe('step gating', () => {
   it('requires both track and grade before leaving step 1', () => {
-    expect(isStepComplete('alan', { ...base, track: 'SAYISAL' })).toBe(false);
-    expect(isStepComplete('alan', { ...base, track: 'SAYISAL', gradeLevel: 'MEZUN' })).toBe(true);
+    expect(isStepComplete({ ...base, track: 'SAYISAL' }, 'alan')).toBe(false);
+    expect(isStepComplete({ ...base, track: 'SAYISAL', gradeLevel: 'MEZUN' }, 'alan')).toBe(true);
   });
 
   it('accepts a target expressed as a department, with no ranking', () => {
     // A student who only knows "Tıp istiyorum" must not be blocked here.
-    expect(isStepComplete('hedef', { ...base, targetDepartment: 'Tıp' })).toBe(true);
+    expect(isStepComplete({ ...base, targetDepartment: 'Tıp' }, 'hedef')).toBe(true);
+    expect(isStepComplete({ ...base, targetUniversity: 'Boğaziçi' }, 'hedef')).toBe(true);
+    expect(isStepComplete({ ...base, targetRanking: 5_000 }, 'hedef')).toBe(true);
+  });
+
+  it('does not accept a blank target', () => {
+    expect(isStepComplete({ ...base }, 'hedef')).toBe(false);
+    expect(isStepComplete({ ...base, targetDepartment: '   ' }, 'hedef')).toBe(false);
   });
 
   it('treats both TYT and AYT net as optional', () => {
     // A student who hasn't sat either exam yet must not be stuck here.
-    expect(isStepComplete('net', { ...base })).toBe(true);
-    expect(isStepComplete('net', { ...base, baselineTytNet: 55 })).toBe(true);
-    expect(isStepComplete('net', { ...base, baselineAytNet: 20 })).toBe(true);
+    expect(isStepComplete({ ...base }, 'net')).toBe(true);
+    expect(isStepComplete({ ...base, baselineTytNet: 55 }, 'net')).toBe(true);
+    expect(isStepComplete({ ...base, baselineAytNet: 20 }, 'net')).toBe(true);
   });
 
-  it('resumes at the first gap rather than the last step touched', () => {
-    const answers: OnboardingAnswers = {
-      track: 'SAYISAL',
-      gradeLevel: 'MEZUN',
-      baselineTytNet: 55,
-      preferredStyles: ['STRICT'],
-      budgetMaxMinor: 300_000,
-    };
-    expect(firstIncompleteStep(answers)).toBe('hedef');
+  it('requires at least one coaching style', () => {
+    expect(isStepComplete({ ...base }, 'tarz')).toBe(false);
+    expect(isStepComplete({ ...base, preferredStyles: ['STRICT'] }, 'tarz')).toBe(true);
   });
 
-  it('has five steps with contiguous indices', () => {
-    expect(STEPS.map((s) => s.index)).toEqual([0, 1, 2, 3, 4]);
+  it('requires a budget ceiling', () => {
+    expect(isStepComplete({ ...base, budgetMinMinor: 100_000 }, 'butce')).toBe(false);
+    expect(isStepComplete({ ...base, budgetMaxMinor: 300_000 }, 'butce')).toBe(true);
+  });
+
+  it('has five steps, each with a title', () => {
+    expect(STEPS).toEqual(['alan', 'hedef', 'net', 'tarz', 'butce']);
+    expect(STEPS.every((s) => STEP_TITLES[s].length > 0)).toBe(true);
   });
 });
 
 describe('Turkish formatting', () => {
-  it('formats rankings the way students say them', () => {
-    expect(formatRanking(150_000)).toBe('150 bin');
-    expect(formatRanking(850)).toBe('850');
-  });
-
   it('formats lira with a Turkish thousands separator', () => {
     expect(formatTry(300_000)).toBe('3.000 ₺');
     expect(formatTry(null)).toBe('—');
+  });
+
+  it('shows TYT and AYT climbs separately', () => {
+    expect(
+      formatNetJourney({ baselineTytNet: 68, finalTytNet: 108, baselineAytNet: 40, finalAytNet: 65 }),
+    ).toBe('TYT 68 → 108 · AYT 40 → 65 net');
+  });
+
+  it('shows only the exam that has both ends set', () => {
+    expect(
+      formatNetJourney({ baselineTytNet: 68, finalTytNet: 108, baselineAytNet: 40, finalAytNet: null }),
+    ).toBe('TYT 68 → 108 net');
+    expect(
+      formatNetJourney({ baselineTytNet: null, finalTytNet: null, baselineAytNet: null, finalAytNet: null }),
+    ).toBeNull();
   });
 });
 
