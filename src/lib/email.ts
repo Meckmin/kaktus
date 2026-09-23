@@ -1,5 +1,6 @@
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { env } from '@/lib/env';
 import { deliveryMode, isUsableResendKey, readResendKey } from './resend-config';
 
 /**
@@ -58,7 +59,7 @@ async function deliverByResend(message: EmailMessage): Promise<void> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Kaktüs Koçluk <merhaba@kaktuskocluk.com>',
+      from: env.EMAIL_FROM,
       to: [message.to],
       subject: message.subject,
       text: message.text,
