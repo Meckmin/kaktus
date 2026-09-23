@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kaktus
+          POSTGRES_PASSWORD: kaktus
+          POSTGRES_DB: kaktus_test
+        ports:
+          - 5432:5432
+        # Higher connection limit: the concurrency suite opens 20 concurrent
+        # transactions. Matches docker-compose.test.yml, used for local runs.
+        options: >-
+          --health-cmd "pg_isready -U kaktus -d kaktus_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://kaktus:kaktus@localhost:5432/kaktus_test
+      DIRECT_DATABASE_URL: postgresql://kaktus:kaktus@localhost:5432/kaktus_test
+      # CI-only values — they protect nothing real, so they live in the
+      # workflow file rather than repo secrets. Real deploys must never reuse
+      # these; see .env.example for what to generate instead.
+      AUTH_SECRET: ci-only-not-a-real-secret-0000000000000000
+      FIELD_ENCRYPTION_KEY: rUAG+29t+epRrwu7bGXhBibzUlPOXWZze4ag6p116wA=
+      CRON_SECRET: ci-only-not-a-real-secret-0000000000000000
+      PAYMENT_PROVIDER: mock
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+
+      - name: Verify (server-action shape + typecheck)
+        run: npm run verify
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Integration tests (concurrency, escrow, disputes)
+        run: npm run test:integration

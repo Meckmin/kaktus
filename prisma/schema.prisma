@@ -1,0 +1,1075 @@
+// Kaktüs Koçluk — data model
+// Money is ALWAYS stored as Int minor units (kuruş). Never Float, never Decimal-for-balance.
+// Balances are DERIVED from LedgerEntry. There is no mutable `balance` column anywhere.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_DATABASE_URL")
+  extensions = [btree_gist, pg_trgm, citext]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  STUDENT
+  COACH
+  ADMIN
+}
+
+enum Track {
+  SAYISAL
+  ESIT_AGIRLIK
+  SOZEL
+  DIL
+}
+
+enum GradeLevel {
+  GRADE_11
+  GRADE_12
+  MEZUN
+}
+
+enum CoachingStyle {
+  STRICT // disiplinli, sıkı takip
+  EMPATHETIC // mentor, motivasyon odaklı
+  STRATEGIC // sınav stratejisi / net planlama odaklı
+  HIGH_TOUCH // sık check-in, günlük temas
+}
+
+enum VerificationStatus {
+  DRAFT
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum DocumentType {
+  YKS_RESULT // ÖSYM sonuç belgesi
+  YKS_PLACEMENT // yerleştirme belgesi
+  STUDENT_CERTIFICATE // öğrenci belgesi
+  IDENTITY
+  DIPLOMA
+}
+
+enum PricingCadence {
+  WEEKLY_SYNC
+  MONTHLY_STANDARD
+  INTENSIVE
+  SINGLE_SESSION
+}
+
+enum OfferStatus {
+  DRAFT
+  OFFERED
+  COUNTERED
+  ACCEPTED
+  PAID_IN_ESCROW
+  ACTIVE
+  COMPLETED
+  DISPUTED
+  REFUNDED
+  CANCELLED
+  EXPIRED
+}
+
+enum ActorRole {
+  STUDENT
+  COACH
+  ADMIN
+  SYSTEM
+}
+
+enum HoldStatus {
+  HELD
+  CONVERTED
+  RELEASED
+  EXPIRED
+}
+
+enum BookingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED_BY_STUDENT
+  CANCELLED_BY_COACH
+  NO_SHOW_STUDENT
+  NO_SHOW_COACH
+}
+
+enum MilestoneStatus {
+  SCHEDULED
+  IN_PROGRESS
+  PENDING_CONFIRMATION
+  RELEASED
+  DISPUTED
+  REFUNDED
+}
+
+enum EngagementStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  INITIATED
+  REQUIRES_ACTION // 3DS
+  CAPTURED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum LedgerAccount {
+  PSP_RECEIVABLE // funds at the payment provider
+  PLATFORM_ESCROW // held on behalf of student/coach, not yet earned
+  COACH_PAYABLE // coach withdrawable balance
+  PLATFORM_REVENUE // commission earned
+  STUDENT_REFUND // refunds paid back out
+  PSP_FEE
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum PayoutStatus {
+  PENDING
+  SUBMITTED
+  PAID
+  FAILED
+}
+
+enum RefundStatus {
+  PENDING
+  SUBMITTED
+  SETTLED
+  FAILED
+}
+
+enum DisputeStatus {
+  OPEN
+  AWAITING_EVIDENCE
+  UNDER_REVIEW
+  RESOLVED_RELEASE // funds to coach
+  RESOLVED_REFUND // funds to student
+  RESOLVED_SPLIT
+  WITHDRAWN
+}
+
+enum ModerationAction {
+  ALLOW
+  MASK
+  BLOCK
+}
+
+enum ViolationKind {
+  PHONE_NUMBER
+  EMAIL
+  IBAN
+  SOCIAL_HANDLE
+  EXTERNAL_LINK
+  PAYMENT_KEYWORD
+  CIRCUMVENTION_INTENT
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Identity (Auth.js v5 — Prisma adapter shape)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  phone         String? // platform-held, never shown to counterparty
+  phoneVerified DateTime?
+  roles         Role[]    @default([STUDENT])
+  locale        String    @default("tr")
+  timezone      String    @default("Europe/Istanbul")
+  bannedAt      DateTime?
+  banReason     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts           Account[]
+  sessions           Session[]
+  studentProfile     StudentProfile?
+  coachProfile       CoachProfile?
+  onboardingSessions OnboardingSession[]
+  messages           Message[]
+  auditLogs          AuditLog[]           @relation("AuditActor")
+  offerEvents        OfferEvent[]
+  disputesOpened     Dispute[]            @relation("DisputeOpener")
+
+  @@index([createdAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Guest onboarding — captured BEFORE auth, claimed at sign-in
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OnboardingSession {
+  id    String @id @default(cuid())
+  /// Opaque token stored in an httpOnly cookie AND embedded in the magic-link
+  /// callback URL, so answers survive an OAuth redirect or a cross-browser
+  /// email click.
+  token String @unique
+
+  track            Track?
+  gradeLevel       GradeLevel?
+  baselineTytNet   Float?
+  baselineAytNet   Float?
+  targetRanking    Int?
+  targetUniversity String?
+  targetDepartment String?
+  preferredStyles  CoachingStyle[]
+  /// TimeWindow[] — [{ weekday: 0-6, startMinute, endMinute }]
+  availability     Json?
+  budgetMinMinor   Int?
+  budgetMaxMinor   Int?
+  budgetCadence    PricingCadence?
+  weeklyHoursGoal  Int?
+
+  completedStep Int      @default(0)
+  currency      String   @default("TRY")
+  ipHash        String?
+  userAgent     String?
+  referrer      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  expiresAt     DateTime
+
+  claimedByUserId String?
+  claimedAt       DateTime?
+  claimedBy       User?     @relation(fields: [claimedByUserId], references: [id], onDelete: SetNull)
+
+  matchRuns MatchRun[]
+
+  @@index([claimedByUserId])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profiles
+// ─────────────────────────────────────────────────────────────────────────────
+
+model StudentProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  track            Track
+  gradeLevel       GradeLevel
+  baselineTytNet   Float?
+  baselineAytNet   Float?
+  targetRanking    Int?
+  targetUniversity String?
+  targetDepartment String?
+  preferredStyles  CoachingStyle[]
+  availability     Json?
+  budgetMinMinor   Int?
+  budgetMaxMinor   Int?
+  budgetCadence    PricingCadence  @default(MONTHLY_STANDARD)
+  weeklyHoursGoal  Int?
+  schoolCity       String?
+
+  /// Provenance: which guest session produced this profile.
+  sourceOnboardingId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  conversations Conversation[]
+  offers        Offer[]
+  engagements   Engagement[]
+  bookings      Booking[]
+  holds         SlotHold[]
+  reviews       Review[]
+
+  @@index([track, gradeLevel])
+}
+
+model CoachProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  slug         String  @unique
+  headline     String
+  bio          String  @db.Text
+  introVideoUrl String?
+  city         String?
+  timezone     String  @default("Europe/Istanbul")
+
+  // Credentials
+  university     String
+  department     String
+  graduationYear Int?
+  yksRank        Int
+  yksYear        Int
+  yksTrack       Track
+
+  // Personal trajectory — the core matching signal
+  ownBaselineNet Float?
+  ownFinalNet    Float?
+  ownBaselineRank Int?
+  wasMezun       Boolean @default(false)
+
+  // Supply configuration
+  tracks           Track[]
+  subjects         String[] // ["AYT Matematik", "TYT Türkçe", …]
+  styles           CoachingStyle[]
+  supportedGrades  GradeLevel[]
+  maxActiveStudents Int           @default(10)
+  /// Hours per week the coach can actually give. Distinct from student count:
+  /// ten students at 30 minutes is a different business from three at 2 hours.
+  weeklyCapacityHours Int?
+  acceptingStudents Boolean       @default(true)
+  /// Commission override in basis points; null = use platform default.
+  commissionBpsOverride Int?
+
+  // Denormalised stats — recomputed by job, never trusted for money
+  ratingAvg              Float    @default(0)
+  ratingCount            Int      @default(0)
+  completedEngagements   Int      @default(0)
+  activeEngagements      Int      @default(0)
+  responseP50Seconds     Int?
+  cancellationRate       Float    @default(0)
+  lastActiveAt           DateTime @default(now())
+
+  verificationStatus VerificationStatus @default(DRAFT)
+  verificationNote   String?
+  verifiedAt         DateTime?
+  suspendedAt        DateTime?
+
+  /// Iyzico alt üye işyeri key. Payouts are impossible without it.
+  submerchantKey    String?
+  payoutReadyAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  specializations  CoachSpecialization[]
+  documents        VerificationDocument[]
+  pricingTiers     PricingTier[]
+  availabilityRules AvailabilityRule[]
+  availabilityExceptions AvailabilityException[]
+  holds            SlotHold[]
+  bookings         Booking[]
+  conversations    Conversation[]
+  offers           Offer[]
+  engagements      Engagement[]
+  payouts          Payout[]
+  reviews          Review[]
+  payoutProfile    CoachPayoutProfile?
+
+  @@index([verificationStatus, acceptingStudents])
+  @@index([yksRank])
+}
+
+/// Bank and identity details needed to register an Iyzico sub-merchant.
+///
+/// Split off CoachProfile deliberately. `CoachProfile` is read on every public
+/// profile page and by the matcher; TCKN and IBAN must never be one careless
+/// `select: *` away from a page that renders for anonymous visitors. A separate
+/// table means the sensitive columns are absent by default rather than
+/// present-and-hopefully-not-selected.
+///
+/// Values are encrypted at rest with AES-256-GCM (see lib/crypto/field.ts).
+/// After the sub-merchant is created at Iyzico we hold the key and no longer
+/// need the source data, so `purgedAt` records when the ciphertext was cleared.
+model CoachPayoutProfile {
+  id             String       @id @default(cuid())
+  coachProfileId String       @unique
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+
+  submerchantType String // PERSONAL | PRIVATE_COMPANY | LIMITED_COMPANY
+  legalName       String
+  /// Ciphertext. Never selected outside the sub-merchant registration path.
+  ibanEncrypted   Bytes?
+  /// Last four digits, for "IBAN ****4521" in the admin UI without decrypting.
+  ibanLast4       String?
+  /// TCKN (personal) or VKN (company), ciphertext.
+  identityEncrypted Bytes?
+  taxOffice       String?
+  address         String
+  city            String
+  phone           String
+
+  purgedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model CoachSpecialization {
+  id             String       @id @default(cuid())
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+
+  label     String // "Mezunlukta 50binden ilk 1000'e"
+  slug      String
+  /// Optional structured rank band this specialization claims to serve.
+  fromRank  Int?
+  toRank    Int?
+
+  @@unique([coachProfileId, slug])
+  @@index([slug])
+}
+
+model VerificationDocument {
+  id             String       @id @default(cuid())
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+
+  type         DocumentType
+  /// Private bucket object key. Never a public URL.
+  storageKey   String
+  mimeType     String
+  sizeBytes    Int
+  status       VerificationStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime           @default(now())
+
+  @@index([coachProfileId, status])
+}
+
+model PricingTier {
+  id             String       @id @default(cuid())
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+
+  name              String
+  cadence           PricingCadence
+  priceMinor        Int
+  currency          String         @default("TRY")
+  sessionsPerCycle  Int
+  minutesPerSession Int
+  includesMessaging Boolean        @default(true)
+  description       String?
+  active            Boolean        @default(true)
+  sortOrder         Int            @default(0)
+
+  offers Offer[]
+
+  @@unique([coachProfileId, cadence, name])
+  @@index([coachProfileId, active])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Availability
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Recurring weekly availability, expressed in the coach's timezone.
+model AvailabilityRule {
+  id             String       @id @default(cuid())
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+
+  weekday       Int // 0 = Sunday … 6 = Saturday
+  startMinute   Int // minutes from local midnight
+  endMinute     Int
+  timezone      String    @default("Europe/Istanbul")
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  active        Boolean   @default(true)
+
+  @@index([coachProfileId, weekday, active])
+}
+
+/// Blackout dates / one-off unavailability.
+model AvailabilityException {
+  id             String       @id @default(cuid())
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+
+  date        DateTime @db.Date
+  allDay      Boolean  @default(true)
+  startMinute Int?
+  endMinute   Int?
+  reason      String?
+
+  @@index([coachProfileId, date])
+}
+
+/// Soft lock taken while an offer is open. Overlap is prevented by a Postgres
+/// EXCLUDE constraint (see marketplace_constraints.sql), not by app-level checks.
+model SlotHold {
+  id             String       @id @default(cuid())
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+
+  studentProfileId String
+  student          StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  offerId String?
+  offer   Offer?  @relation(fields: [offerId], references: [id], onDelete: SetNull)
+
+  /// timestamptz, not timestamp: the exclusion constraint in
+  /// prisma/migrations/20260101000000_marketplace_constraints indexes
+  /// tstzrange(startsAt, endsAt) directly, and Postgres will only allow that
+  /// in a GiST index when it needs no timezone-dependent cast — a plain
+  /// `timestamp` column makes the cast STABLE rather than IMMUTABLE and
+  /// Postgres refuses to build the index at all.
+  startsAt  DateTime @db.Timestamptz(3)
+  endsAt    DateTime @db.Timestamptz(3)
+  status    HoldStatus @default(HELD)
+  expiresAt DateTime
+  createdAt DateTime   @default(now())
+
+  @@index([coachProfileId, status, startsAt])
+  @@index([expiresAt, status])
+  @@index([offerId])
+}
+
+model Booking {
+  id             String       @id @default(cuid())
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+
+  studentProfileId String
+  student          StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  engagementId String?
+  engagement   Engagement? @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  milestoneId  String?
+  milestone    Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+
+  /// timestamptz — see the note on SlotHold.startsAt; Booking's exclusion
+  /// constraint has the same requirement.
+  startsAt DateTime @db.Timestamptz(3)
+  endsAt   DateTime @db.Timestamptz(3)
+  status   BookingStatus @default(SCHEDULED)
+
+  meetingUrl        String?
+  coachConfirmedAt  DateTime?
+  studentConfirmedAt DateTime?
+  cancelledByRole   ActorRole?
+  cancelReason      String?
+  notes             String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([coachProfileId, startsAt])
+  @@index([studentProfileId, startsAt])
+  @@index([engagementId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Messaging + moderation
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Conversation {
+  id             String       @id @default(cuid())
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+
+  studentProfileId String
+  student          StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  lastMessageAt DateTime  @default(now())
+  archivedAt    DateTime?
+  /// Cumulative circumvention risk; crossing a threshold flags for review.
+  riskScore     Int       @default(0)
+  flaggedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  messages Message[]
+  offers   Offer[]
+
+  @@unique([coachProfileId, studentProfileId])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  senderId String
+  sender   User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  /// What both parties see. This is the column Realtime publishes.
+  body String @db.Text
+  /// Original text, retained encrypted for dispute evidence. Admin-only reads.
+  bodyOriginalEncrypted Bytes?
+
+  moderationAction ModerationAction @default(ALLOW)
+  riskScore        Int              @default(0)
+  systemNotice     String?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  violations MessageViolation[]
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model MessageViolation {
+  id        String  @id @default(cuid())
+  messageId String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  kind     ViolationKind
+  severity Int
+  /// The detector that fired, NOT the extracted PII.
+  detector String
+  /// Redacted excerpt for admin context, e.g. "05** *** ** **".
+  excerpt  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([kind, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Offers — status is written ONLY by the state machine
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Offer {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+
+  studentProfileId String
+  student          StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  initiatorRole ActorRole
+  basePricingTierId String?
+  basePricingTier   PricingTier? @relation(fields: [basePricingTierId], references: [id], onDelete: SetNull)
+
+  title    String
+  /// { sessionsPerCycle, minutesPerSession, cadence, weeks, deliverables[], notes }
+  scope    Json
+  priceMinor Int
+  currency   String @default("TRY")
+  /// Snapshotted at creation — a later platform-wide change must not alter
+  /// the economics of an already-signed offer.
+  commissionBps Int
+
+  startDate      DateTime
+  endDate        DateTime
+  milestoneCount Int      @default(4)
+
+  status  OfferStatus @default(DRAFT)
+  version Int         @default(1)
+  parentOfferId String?
+  parentOffer   Offer?  @relation("OfferChain", fields: [parentOfferId], references: [id], onDelete: SetNull)
+  counterOffers Offer[] @relation("OfferChain")
+
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events     OfferEvent[]
+  holds      SlotHold[]
+  engagement Engagement?
+  payments   Payment[]
+
+  @@index([status, expiresAt])
+  @@index([conversationId, createdAt])
+  @@index([coachProfileId, status])
+}
+
+model OfferEvent {
+  id      String @id @default(cuid())
+  offerId String
+  offer   Offer  @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  fromStatus OfferStatus?
+  toStatus   OfferStatus
+  actorRole  ActorRole
+  actorId    String?
+  actor      User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  reason     String?
+  metadata   Json?
+  createdAt  DateTime     @default(now())
+
+  @@index([offerId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Engagements & money
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Engagement {
+  id      String @id @default(cuid())
+  offerId String @unique
+  offer   Offer  @relation(fields: [offerId], references: [id], onDelete: Restrict)
+
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Restrict)
+
+  studentProfileId String
+  student          StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Restrict)
+
+  status        EngagementStatus @default(ACTIVE)
+  startDate     DateTime
+  endDate       DateTime
+  totalMinor    Int
+  currency      String           @default("TRY")
+  commissionBps Int
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  milestones   Milestone[]
+  bookings     Booking[]
+  disputes     Dispute[]
+  ledgerEntries LedgerEntry[]
+  refunds      Refund[]
+  review       Review?
+
+  @@index([coachProfileId, status])
+  @@index([studentProfileId, status])
+}
+
+model Milestone {
+  id           String     @id @default(cuid())
+  engagementId String
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  index       Int
+  periodStart DateTime
+  periodEnd   DateTime
+  amountMinor Int
+
+  status             MilestoneStatus @default(SCHEDULED)
+
+  /// Iyzico `paymentTransactionId` for this milestone's basket item.
+  /// Approve and refund both operate on this handle, not on the payment — it
+  /// is what makes per-milestone escrow release possible at all.
+  providerTransactionId String?
+  /// When the provider confirmed the release (item approve succeeded).
+  providerApprovedAt    DateTime?
+  providerApproveError  String?
+
+  coachConfirmedAt   DateTime?
+  studentConfirmedAt DateTime?
+  /// If nobody disputes by this time, funds release automatically.
+  autoReleaseAt      DateTime?
+  releasedAt         DateTime?
+  refundedAt         DateTime?
+
+  bookings      Booking[]
+  disputes      Dispute[]
+  ledgerEntries LedgerEntry[]
+
+  @@unique([engagementId, index])
+  @@index([status, autoReleaseAt])
+  @@index([providerTransactionId])
+}
+
+model Payment {
+  id      String  @id @default(cuid())
+  offerId String?
+  offer   Offer?  @relation(fields: [offerId], references: [id], onDelete: SetNull)
+
+  provider       String // "iyzico" | "mock"
+  /// Iyzico paymentId, once captured.
+  providerRef    String?
+  /// Checkout Form token. The handle for retrieveCheckout(), and the only
+  /// thing the browser callback gives us that we are willing to act on.
+  token          String?
+  basketId       String?
+  conversationId String?
+  amountMinor    Int
+  currency       String        @default("TRY")
+  status         PaymentStatus @default(INITIATED)
+  method         String?
+  installment    Int           @default(1)
+
+  /// Every provider call and webhook is keyed. Iyzico WILL retry.
+  idempotencyKey String  @unique
+  rawRequest     Json?
+  rawResponse    Json?
+  failureCode    String?
+  failureMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ledgerEntries LedgerEntry[]
+  refunds       Refund[]
+
+  @@index([status, createdAt])
+  @@index([providerRef])
+  @@index([token])
+}
+
+/// Double-entry. Every movement writes >= 2 rows sharing an entryGroupId that
+/// sums to zero. Enforced by a deferred constraint trigger.
+model LedgerEntry {
+  id           String          @id @default(cuid())
+  entryGroupId String
+  account      LedgerAccount
+  direction    LedgerDirection
+  amountMinor  Int
+  currency     String          @default("TRY")
+
+  engagementId String?
+  engagement   Engagement? @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  milestoneId  String?
+  milestone    Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  paymentId    String?
+  payment      Payment?    @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  payoutId     String?
+  payout       Payout?     @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  coachProfileId String?
+
+  description String
+  createdAt   DateTime @default(now())
+
+  @@index([entryGroupId])
+  @@index([account, createdAt])
+  @@index([coachProfileId, account])
+  @@index([engagementId])
+}
+
+model Payout {
+  id             String       @id @default(cuid())
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Restrict)
+
+  amountMinor    Int
+  currency       String       @default("TRY")
+  status         PayoutStatus @default(PENDING)
+  provider       String
+  providerRef    String?
+  idempotencyKey String       @unique
+  failureMessage String?
+
+  submittedAt DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  ledgerEntries LedgerEntry[]
+
+  @@index([coachProfileId, status])
+}
+
+model Dispute {
+  id           String     @id @default(cuid())
+  engagementId String
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  milestoneId  String?
+  milestone    Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+
+  openedById String
+  openedBy   User      @relation("DisputeOpener", fields: [openedById], references: [id], onDelete: Restrict)
+  openedByRole ActorRole
+
+  reason      String
+  detail      String        @db.Text
+  evidence    Json?
+  status      DisputeStatus @default(OPEN)
+  resolution  String?
+  resolvedById String?
+  resolvedAt  DateTime?
+  /// For RESOLVED_SPLIT: how much of the milestone goes to the coach.
+  coachShareMinor Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([engagementId])
+}
+
+model Review {
+  id           String     @id @default(cuid())
+  engagementId String     @unique
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  coachProfileId String
+  coach          CoachProfile @relation(fields: [coachProfileId], references: [id], onDelete: Cascade)
+  studentProfileId String
+  student          StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  rating    Int // 1..5, checked in SQL
+  body      String? @db.Text
+  published Boolean @default(true)
+  /// Net gain reported at the end of the engagement — feeds trajectory scoring.
+  netGainReported Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([coachProfileId, published])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Platform config, observability
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Refund intent. Written inside the transaction that reverses the ledger, then
+/// submitted to the provider by a worker AFTER commit. Splitting it this way
+/// means a provider outage never rolls back the accounting, and a crash between
+/// the two leaves a PENDING row the worker retries rather than money that was
+/// refunded in our books but not at the bank.
+model Refund {
+  id           String     @id @default(cuid())
+  engagementId String
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Restrict)
+  paymentId    String?
+  payment      Payment?   @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  amountMinor Int
+  currency    String       @default("TRY")
+  reason      String
+  status      RefundStatus @default(PENDING)
+
+  /// Which basket item to refund. Iyzico refunds per paymentTransactionId, so
+  /// a whole-engagement refund becomes one Refund row per unreleased milestone.
+  paymentTransactionId String?
+  milestoneId          String?
+
+  idempotencyKey String  @unique
+  providerRef    String?
+  attempts       Int     @default(0)
+  lastError      String?
+  nextAttemptAt  DateTime @default(now())
+
+  submittedAt DateTime?
+  settledAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([engagementId])
+}
+
+/// Inbound provider notifications, deduplicated.
+///
+/// Iyzico redelivers every 15 minutes until it gets a 2xx, and stops after 3
+/// attempts. The unique reference code turns replay handling into an insert
+/// conflict rather than application logic — a duplicate simply cannot be
+/// processed twice, even if two workers receive it simultaneously.
+model WebhookEvent {
+  id       String @id @default(cuid())
+  provider String
+
+  /// iyziReferenceCode. Unique per notification, stable across redeliveries.
+  referenceCode String @unique
+  eventType     String
+  status        String
+
+  /// Merchant-side correlation id, i.e. our Payment.idempotencyKey.
+  conversationId String?
+  providerRef    String?
+
+  payload      Json
+  signatureOk  Boolean
+  processedAt  DateTime?
+  processError String?
+  attempts     Int       @default(0)
+  receivedAt   DateTime  @default(now())
+
+  @@index([conversationId])
+  @@index([processedAt])
+}
+
+model CommissionPolicy {
+  id            String    @id @default(cuid())
+  name          String
+  defaultBps    Int       @default(1800)
+  minBps        Int       @default(1000)
+  maxBps        Int       @default(2500)
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+
+  @@index([effectiveFrom])
+}
+
+/// One row per rendered match list. Makes weighting changes measurable.
+model MatchRun {
+  id                  String             @id @default(cuid())
+  onboardingSessionId String?
+  onboardingSession   OnboardingSession? @relation(fields: [onboardingSessionId], references: [id], onDelete: SetNull)
+  studentProfileId    String?
+
+  weightsVersion  String
+  candidateCount  Int
+  /// [{ coachProfileId, rawScore, displayScore, position, reasons[] }]
+  results         Json
+  latencyMs       Int
+  createdAt       DateTime @default(now())
+
+  @@index([weightsVersion, createdAt])
+}
+
+model AuditLog {
+  id       String     @id @default(cuid())
+  actorId  String?
+  actor    User?      @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole ActorRole @default(SYSTEM)
+
+  action     String // "offer.transition", "coach.approve", "payout.submit"
+  entityType String
+  entityId   String
+  metadata   Json?
+  ipHash     String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([action, createdAt])
+}

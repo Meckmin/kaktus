@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+build/
+.env
+.env.local
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+coverage/
+.DS_Store
+
+# Sign-in links written by the local magic-link fallback. Real credentials.
+.auth-link.txt
+# Notification emails written by the local delivery fallback (src/lib/email.ts).
+.notifications-log.txt
+.private-uploads/

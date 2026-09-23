@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-limestone text-ink font-sans antialiased;
+  }
+
+  /* Keyboard focus must stay visible everywhere. Onboarding is a form funnel;
+     losing focus rings is losing the flow for anyone not using a mouse. */
+  :focus-visible {
+    outline: 2px solid theme('colors.cactus.DEFAULT');
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: theme('colors.bloom.pale');
+  }
+}
+
+@layer components {
+  /* The one orchestrated motion in the product: an answer settling into the
+     rail. Everything else is instant. */
+  .answer-settle {
+    animation: settle 380ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  }
+
+  @keyframes settle {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scaleY(0.94);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Score meter fill, drawn on mount. */
+  .meter-fill {
+    animation: grow 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: left;
+  }
+
+  @keyframes grow {
+    from {
+      transform: scaleX(0);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
