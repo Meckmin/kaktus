@@ -517,7 +517,11 @@ describe('approveCoach', () => {
     const { user: adminUser } = await makeStudent();
     mockRequireAdmin.mockResolvedValue({ id: adminUser.id });
     const { coach } = await makeCoach();
-    await prisma.coachProfile.update({ where: { id: coach.id }, data: { verificationStatus: 'IN_REVIEW' } });
+    // A real submission parks acceptingStudents at false until approval.
+    await prisma.coachProfile.update({
+      where: { id: coach.id },
+      data: { verificationStatus: 'IN_REVIEW', acceptingStudents: false },
+    });
     await prisma.verificationDocument.create({
       data: {
         coachProfileId: coach.id,
@@ -534,6 +538,8 @@ describe('approveCoach', () => {
     expect(result).toEqual({ ok: true });
     const after = await prisma.coachProfile.findUniqueOrThrow({ where: { id: coach.id } });
     expect(after.verificationStatus).toBe('APPROVED');
+    // Approval is what makes the coach discoverable to matching.
+    expect(after.acceptingStudents).toBe(true);
     const doc = await prisma.verificationDocument.findFirstOrThrow({ where: { coachProfileId: coach.id } });
     expect(doc.status).toBe('APPROVED');
     const log = await prisma.auditLog.findFirst({ where: { entityId: coach.id, action: 'coach.approved' } });

@@ -47,6 +47,10 @@ export async function approveCoach(input: { coachProfileId: string; note?: strin
         verificationStatus: 'APPROVED',
         verifiedAt: new Date(),
         verificationNote: parsed.data.note ?? null,
+        // Submission parks this at false until a human approves (see
+        // submitCoachApplication); approval is the moment it opens. Without
+        // this, every newly approved coach stayed invisible to matching.
+        acceptingStudents: true,
       },
       select: { userId: true },
     });
