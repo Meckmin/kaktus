@@ -60,7 +60,7 @@ export default async function CoachProfilePage({
     : null;
 
   const [calendar, draft] = await Promise.all([
-    getCoachCalendar(coach.id, { days: 14, viewerStudentProfileId: viewer?.id ?? null }),
+    getCoachCalendar(coach.id, { days: 28, viewerStudentProfileId: viewer?.id ?? null }),
     query.teklif === '1' ? readOfferDraft() : Promise.resolve(null),
   ]);
 

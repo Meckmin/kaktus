@@ -5,6 +5,7 @@ import {
   acquireAdvisoryLock,
   casStatus,
 } from '@/lib/tx';
+import { milestoneCompletableAt } from '@/lib/offers/scope';
 import { postMilestoneRelease } from '@/lib/payments/escrow';
 import { getPaymentProvider } from '@/lib/payments/provider';
 import { AUTO_RELEASE_DAYS, maybeCompleteEngagement } from '@/jobs/milestones';
@@ -29,6 +30,7 @@ export class MilestoneActionError extends Error {
       | 'FORBIDDEN'
       | 'WRONG_STATE'
       | 'DISPUTE_OPEN'
+      | 'TOO_EARLY'
       | 'CONCURRENT',
   ) {
     super(userMessage);
@@ -43,6 +45,8 @@ const MILESTONE_LOAD = {
     status: true,
     amountMinor: true,
     autoReleaseAt: true,
+    periodEnd: true,
+    bookings: { select: { endsAt: true, status: true } },
     providerTransactionId: true,
     providerApprovedAt: true,
     engagement: {
@@ -96,6 +100,20 @@ export async function markMilestoneCompleted(args: {
   }
 
   const now = new Date();
+  const completableAt = milestoneCompletableAt(milestone.bookings, milestone.periodEnd);
+  if (now < completableAt) {
+    throw new MilestoneActionError(
+      `Bu dilimin dersi henüz bitmedi. ${completableAt.toLocaleString('tr-TR', {
+        timeZone: 'Europe/Istanbul',
+        day: 'numeric',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+      })} sonrasında işaretleyebilirsin.`,
+      'TOO_EARLY',
+    );
+  }
+
   const autoReleaseAt =
     milestone.autoReleaseAt ?? new Date(now.getTime() + AUTO_RELEASE_DAYS * 24 * 3600 * 1000);
 

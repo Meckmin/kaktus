@@ -338,9 +338,20 @@ describe('payForOffer', () => {
 // milestones.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Moves a milestone's sessions (and period) into the past so it can be marked done. */
+async function lessonsHeld(milestoneId: string) {
+  const past = new Date(Date.now() - 60 * 60 * 1000);
+  await prisma.milestone.update({ where: { id: milestoneId }, data: { periodEnd: past } });
+  await prisma.booking.updateMany({
+    where: { milestoneId },
+    data: { startsAt: new Date(past.getTime() - 60 * 60 * 1000), endsAt: past },
+  });
+}
+
 describe('completeMilestone', () => {
-  it('lets the coach mark a scheduled milestone as pending confirmation', async () => {
+  it('lets the coach mark a milestone as pending confirmation once its lesson has ended', async () => {
     const { coachUser, engagement } = await fundedEngagement();
+    await lessonsHeld(engagement.milestones[0].id);
     asUser(coachUser.id);
 
     const result = await completeMilestone(engagement.milestones[0].id);
@@ -348,6 +359,21 @@ describe('completeMilestone', () => {
     expect(result.ok).toBe(true);
     const after = await prisma.milestone.findUniqueOrThrow({ where: { id: engagement.milestones[0].id } });
     expect(after.status).toBe('PENDING_CONFIRMATION');
+  });
+
+  it('refuses before the milestone\'s lesson has ended', async () => {
+    // Otherwise a coach could mark every week done on day one and let the
+    // 5-day auto-release pay out the whole program before any lesson.
+    const { coachUser, engagement } = await fundedEngagement();
+    asUser(coachUser.id);
+
+    const result = await completeMilestone(engagement.milestones[0].id);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.message).toContain('henüz bitmedi');
+    const after = await prisma.milestone.findUniqueOrThrow({ where: { id: engagement.milestones[0].id } });
+    expect(after.status).toBe('SCHEDULED');
   });
 
   it('refuses a student trying to mark their own milestone complete', async () => {

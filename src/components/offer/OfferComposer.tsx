@@ -189,6 +189,8 @@ export function OfferComposer({
             {state.slots.length < slotsNeeded && (
               <p className="mt-3 text-sm text-muted">
                 {slotsNeeded - state.slots.length} seans daha seç.
+                {state.packageType === 'MONTHLY_4W' &&
+                  ' Her haftadan bir seans seçersen ödemen de haftalık dilimlerle, her dersten sonra aktarılır.'}
               </p>
             )}
           </section>

@@ -498,8 +498,8 @@ function MilestonesPanel({
       </div>
       <p className="mt-1 text-sm text-muted">
         {viewerRole === 'COACH'
-          ? 'Her dönemi tamamladığında işaretle. Öğrenci onaylayınca ya da 5 gün geçince ücret sana aktarılır.'
-          : 'Koç bir dönemi tamamladığında onaylayıp ücreti aktarabilirsin. 5 gün içinde işlem yapmazsan ücret otomatik aktarılır.'}
+          ? 'Her dersten sonra o dilimi işaretle. Öğrenci onaylayınca ya da 5 gün geçince ücret sana aktarılır.'
+          : 'Her dilim bir derse karşılık gelir. Koç dersi işaretleyince onaylayıp ücreti aktarabilirsin; 5 gün içinde işlem yapmazsan ücret otomatik aktarılır.'}
       </p>
 
       <ul className="mt-3 space-y-px overflow-hidden rounded-xl border border-stone/70 bg-stone/60">
@@ -514,7 +514,7 @@ function MilestonesPanel({
                 <span>
                   {label}
                   <span className="ml-2 text-sm text-muted">
-                    {new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium' }).format(
+                    {new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }).format(
                       m.periodStart,
                     )}
                   </span>
@@ -535,7 +535,22 @@ function MilestonesPanel({
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {viewerRole === 'COACH' &&
-                  (m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS') && (
+                  (m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS') &&
+                  now < m.completableAt.getTime() && (
+                    <p className="text-sm text-muted">
+                      Ders bitince işaretleyebilirsin ·{' '}
+                      {new Intl.DateTimeFormat('tr-TR', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }).format(m.completableAt)}
+                    </p>
+                  )}
+
+                {viewerRole === 'COACH' &&
+                  (m.status === 'SCHEDULED' || m.status === 'IN_PROGRESS') &&
+                  now >= m.completableAt.getTime() && (
                     <button
                       type="button"
                       disabled={isBusy}

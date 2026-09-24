@@ -62,3 +62,65 @@ export function milestonePeriods(
     periodEnd: i === count - 1 ? endDate : new Date(startDate.getTime() + step * (i + 1)),
   }));
 }
+
+/**
+ * Milestone boundaries anchored to the booked sessions.
+ *
+ * Each milestone owns a contiguous run of sessions, and its period starts at
+ * its first session and ends where the next milestone's first session starts
+ * (the last one runs to the engagement end). Bookings are assigned by
+ * `startsAt ∈ [periodStart, periodEnd)`, so every session lands in exactly one
+ * milestone and no milestone is left without a session — which the even time
+ * split above could not promise: four sessions packed into two weeks left the
+ * middle two milestones empty, i.e. money released for no lesson at all.
+ *
+ * Falls back to the time split when there are fewer sessions than milestones
+ * (or none), since then there is nothing to anchor to.
+ */
+export function milestonePeriodsForSlots(
+  slots: Array<{ startsAt: Date; endsAt: Date }>,
+  startDate: Date,
+  endDate: Date,
+  count: number,
+): Array<{ index: number; periodStart: Date; periodEnd: Date }> {
+  if (count < 1) throw new Error('Milestone count must be >= 1');
+  if (slots.length < count) return milestonePeriods(startDate, endDate, count);
+
+  const sorted = [...slots].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  // Spread any remainder over the first milestones: 5 sessions / 4 → 2,1,1,1.
+  const base = Math.floor(sorted.length / count);
+  const extra = sorted.length % count;
+  const firstIndexes: number[] = [];
+  let cursor = 0;
+  for (let i = 0; i < count; i++) {
+    firstIndexes.push(cursor);
+    cursor += base + (i < extra ? 1 : 0);
+  }
+
+  const last = sorted[sorted.length - 1];
+  const end = new Date(Math.max(endDate.getTime(), last.endsAt.getTime()));
+
+  return firstIndexes.map((first, i) => ({
+    index: i,
+    periodStart: sorted[first].startsAt,
+    periodEnd: i === count - 1 ? end : sorted[firstIndexes[i + 1]].startsAt,
+  }));
+}
+
+/**
+ * The earliest moment a coach may mark a milestone as done: when its last
+ * (non-cancelled) session has ended. A milestone with no sessions falls back to
+ * its period end. Before this existed, every milestone could be marked done on
+ * day one, and five days of student silence released the whole program's money
+ * before a single lesson happened.
+ */
+export function milestoneCompletableAt(
+  bookings: Array<{ endsAt: Date; status: string }>,
+  periodEnd: Date,
+): Date {
+  const held = bookings.filter(
+    (b) => b.status !== 'CANCELLED_BY_STUDENT' && b.status !== 'CANCELLED_BY_COACH',
+  );
+  if (held.length === 0) return periodEnd;
+  return new Date(Math.max(...held.map((b) => b.endsAt.getTime())));
+}

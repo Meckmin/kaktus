@@ -5,7 +5,7 @@ import { getPaymentProvider } from '@/lib/payments/provider';
 import type { CheckoutRetrieveResult, EscrowBasketItem } from '@/lib/payments/provider';
 import { buildSplit } from '@/lib/payments/iyzico/money';
 import { splitIntoMilestones } from '@/lib/payments/escrow';
-import { milestonePeriods, parseScope } from '@/lib/offers/scope';
+import { milestonePeriodsForSlots, parseScope } from '@/lib/offers/scope';
 import { transitionOffer } from './offer-service';
 
 /**
@@ -215,7 +215,12 @@ async function ensureMilestones(offerId: string) {
     });
     if (existing.length > 0) return existing;
 
-    const periods = milestonePeriods(offer.startDate, offer.endDate, offer.milestoneCount);
+    const periods = milestonePeriodsForSlots(
+      parseScope(offer.scope).slots,
+      offer.startDate,
+      offer.endDate,
+      offer.milestoneCount,
+    );
     const amounts = splitIntoMilestones(offer.priceMinor, offer.milestoneCount);
 
     await tx.milestone.createMany({

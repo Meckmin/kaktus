@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { milestoneCompletableAt } from '@/lib/offers/scope';
 import { availableEvents, type OfferStatus } from '@/lib/offers/state-machine';
 
 /**
@@ -49,6 +50,8 @@ export interface MilestoneEntry {
   amountMinor: number;
   periodStart: Date;
   autoReleaseAt: Date | null;
+  /** When the coach may mark it done: after its last session ends. */
+  completableAt: Date;
 }
 
 export interface ConversationView {
@@ -125,7 +128,9 @@ export async function getConversation(conversationId: string): Promise<Conversat
                   status: true,
                   amountMinor: true,
                   periodStart: true,
+                  periodEnd: true,
                   autoReleaseAt: true,
+                  bookings: { select: { endsAt: true, status: true } },
                 },
               },
               review: { select: { id: true } },
@@ -221,7 +226,12 @@ export async function getConversation(conversationId: string): Promise<Conversat
         id: paidOffer.engagement.id,
         offerId: paidOffer.id,
         status: paidOffer.engagement.status,
-        milestones: paidOffer.engagement.milestones,
+        milestones: paidOffer.engagement.milestones.map(
+          ({ bookings, periodEnd, ...m }): MilestoneEntry => ({
+            ...m,
+            completableAt: milestoneCompletableAt(bookings, periodEnd),
+          }),
+        ),
         reviewed: Boolean(paidOffer.engagement.review),
       }
     : null;

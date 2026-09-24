@@ -16,7 +16,7 @@ import {
   type TransitionContext,
   transition,
 } from '@/lib/offers/state-machine';
-import { milestonePeriods, parseScope } from '@/lib/offers/scope';
+import { milestonePeriodsForSlots, parseScope } from '@/lib/offers/scope';
 import {
   acquireHolds,
   convertHoldsToBookings,
@@ -366,7 +366,8 @@ async function applyEffect(
       const already = await tx.milestone.count({ where: { engagementId: engagement.id } });
       if (already > 0) return;
 
-      const periods = milestonePeriods(
+      const periods = milestonePeriodsForSlots(
+        parseScope(offer.scope).slots,
         engagement.startDate,
         engagement.endDate,
         offer.milestoneCount,
