@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { auth } from '@/lib/auth';
+import { auth, signOut } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { listConversations } from '@/server/queries/conversation';
 import { formatTry } from '@/lib/onboarding/client-state';
@@ -56,11 +56,23 @@ export default async function PanelPage() {
         <Link href="/" className="text-sm text-muted transition-colors hover:text-cactus">
           Kaktüs Koçluk
         </Link>
-        {isAdmin && (
-          <Link href="/admin" className="text-sm text-cactus hover:text-cactus-deep">
-            Yönetim
-          </Link>
-        )}
+        <div className="flex items-baseline gap-4">
+          {isAdmin && (
+            <Link href="/admin" className="text-sm text-cactus hover:text-cactus-deep">
+              Yönetim
+            </Link>
+          )}
+          <form
+            action={async () => {
+              'use server';
+              await signOut({ redirectTo: '/' });
+            }}
+          >
+            <button type="submit" className="text-sm text-muted transition-colors hover:text-cactus">
+              Çıkış yap
+            </button>
+          </form>
+        </div>
       </div>
 
       <h1 className="mt-6 font-display text-question font-semibold">Panelin</h1>

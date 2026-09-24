@@ -139,8 +139,12 @@ function FilterSummary({ draft }: { draft: OnboardingDraft }) {
   const chips = [
     draft.track && TRACK_LABELS[draft.track].short,
     draft.gradeLevel && GRADE_LABELS[draft.gradeLevel].short,
-    draft.targetRanking && `İlk ${draft.targetRanking.toLocaleString('tr-TR')}`,
+    // Mirrors what the hedef step accepts: a ranking, or a named target.
+    draft.targetRanking
+      ? `İlk ${draft.targetRanking.toLocaleString('tr-TR')}`
+      : [draft.targetUniversity, draft.targetDepartment].filter(Boolean).join(' · ') || null,
     draft.baselineTytNet != null && `TYT ${draft.baselineTytNet} net`,
+    draft.baselineAytNet != null && `AYT ${draft.baselineAytNet} net`,
     draft.budgetMaxMinor != null && `En fazla ${formatTry(draft.budgetMaxMinor)}`,
   ].filter(Boolean) as string[];
 

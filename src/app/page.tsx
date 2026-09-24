@@ -11,6 +11,17 @@ import Link from 'next/link';
 export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-5xl flex-col px-6 py-10 sm:px-8">
+      {/* Returning students and coaches need a way back to their panel; /giris
+          sends an already signed-in visitor straight through to it. */}
+      <nav className="flex justify-end">
+        <Link
+          href="/giris?callbackUrl=/panel"
+          className="text-sm text-muted transition-colors hover:text-cactus"
+        >
+          Giriş yap
+        </Link>
+      </nav>
+
       <div className="flex flex-1 flex-col justify-center py-16">
         <h1 className="max-w-measure font-display text-question font-semibold text-balance">
           Aradığın koçu bul.
