@@ -288,6 +288,31 @@ describe('counterOffer', () => {
     expect(result).toEqual({ ok: false, message: 'Bu teklife artık karşı teklif verilemez.' });
   });
 
+  it('lets the coach discount below half their list price, but not a student', async () => {
+    const { coach, coachUser, studentUser, offer } = await openOffer();
+    await prisma.pricingTier.create({
+      data: {
+        coachProfileId: coach.id,
+        name: 'Aylık',
+        cadence: 'MONTHLY_STANDARD',
+        priceMinor: 400_000,
+        sessionsPerCycle: 4,
+        minutesPerSession: 60,
+      },
+    });
+
+    // Coach offers 1.500 ₺ on a 4.000 ₺ list price: their call to make.
+    asUser(coachUser.id);
+    const coachCounter = await counterOffer(offer.id, { priceMinor: 150_000 });
+    expect(coachCounter.ok).toBe(true);
+    if (!coachCounter.ok) throw new Error('unreachable');
+
+    // The student can't push it under half the list price (2.000 ₺).
+    asUser(studentUser.id);
+    const studentCounter = await counterOffer(coachCounter.offerId, { priceMinor: 100_000 });
+    expect(studentCounter).toEqual({ ok: false, message: 'En az 2.000 ₺ teklif edebilirsin.' });
+  });
+
   it('rejects a price below the minimum before hitting the database', async () => {
     const { coachUser, offer } = await openOffer();
     asUser(coachUser.id);
@@ -646,6 +671,34 @@ describe('submitOffer', () => {
     const offer = await prisma.offer.findUniqueOrThrow({ where: { id: result.offerId } });
     expect(offer.coachProfileId).toBe(coach.id);
     expect(offer.status).toBe('OFFERED');
+  });
+
+  it('refuses an offer under half the coach\'s list price for the package', async () => {
+    const { coach } = await makeCoach();
+    await prisma.pricingTier.create({
+      data: {
+        coachProfileId: coach.id,
+        name: 'Tanışma',
+        cadence: 'SINGLE_SESSION',
+        priceMinor: 120_000,
+        sessionsPerCycle: 1,
+        minutesPerSession: 60,
+      },
+    });
+    const { user: studentUser } = await makeStudent();
+    asUser(studentUser.id);
+
+    const result = await submitOffer({
+      coachProfileId: coach.id,
+      coachSlug: coach.slug,
+      packageType: 'EXPLORATORY',
+      slots: [new Date(Date.now() + 7 * 86_400_000).toISOString()],
+      priceMinor: 50_000,
+      createdAt: new Date().toISOString(),
+    });
+
+    expect(result).toEqual({ ok: false, code: 'INVALID', message: 'En az 600 ₺ teklif edebilirsin.' });
+    expect(await prisma.offer.count({ where: { coachProfileId: coach.id } })).toBe(0);
   });
 
   it('rejects an unauthenticated submission', async () => {

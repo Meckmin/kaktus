@@ -14,6 +14,7 @@ import {
   PACKAGE_CONFIG,
   type OfferDraft,
 } from '@/lib/offers/draft';
+import { belowFloorMessage, minOfferMinor } from '@/lib/offers/price-floor';
 
 const draftSchema = z.object({
   coachProfileId: z.string().min(1).max(64),
@@ -114,10 +115,27 @@ export async function submitOffer(draft: OfferDraft): Promise<SubmitOfferResult>
 
   const coach = await prisma.coachProfile.findUnique({
     where: { slug: parsed.data.coachSlug },
-    select: { id: true, verificationStatus: true, acceptingStudents: true },
+    select: {
+      id: true,
+      verificationStatus: true,
+      acceptingStudents: true,
+      pricingTiers: {
+        where: { active: true },
+        select: { cadence: true, priceMinor: true, sessionsPerCycle: true },
+      },
+    },
   });
   if (!coach || coach.verificationStatus !== 'APPROVED' || !coach.acceptingStudents) {
     return { ok: false, code: 'INVALID', message: 'Bu koç şu anda yeni öğrenci almıyor.' };
+  }
+
+  const floor = minOfferMinor({
+    packageType: parsed.data.packageType,
+    tiers: coach.pricingTiers,
+    role: 'STUDENT',
+  });
+  if (parsed.data.priceMinor < floor) {
+    return { ok: false, code: 'INVALID', message: belowFloorMessage(floor) };
   }
 
   const config = PACKAGE_CONFIG[parsed.data.packageType];

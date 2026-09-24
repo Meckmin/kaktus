@@ -7,6 +7,7 @@ import {
   suggestedPriceMinor,
   type PackageType,
 } from '@/lib/offers/draft';
+import { belowFloorMessage, minOfferMinor } from '@/lib/offers/price-floor';
 import { formatTry } from '@/lib/onboarding/client-state';
 import type { CalendarDay } from '@/lib/booking/availability';
 import { AvailabilityCalendar } from '@/components/coach/AvailabilityCalendar';
@@ -69,7 +70,13 @@ export function OfferComposer({
   const config = PACKAGE_CONFIG[state.packageType];
   const breakdown = computeBreakdown(state.priceMinor, coach.commissionBps);
   const slotsNeeded = config.sessions;
-  const ready = state.slots.length === slotsNeeded && state.priceMinor > 0;
+  const minPrice = minOfferMinor({
+    packageType: state.packageType,
+    tiers: coach.pricingTiers,
+    role: 'STUDENT',
+  });
+  const belowFloor = state.priceMinor > 0 && state.priceMinor < minPrice;
+  const ready = state.slots.length === slotsNeeded && state.priceMinor >= minPrice;
 
   // Read onClose through a ref so the effect below runs only when the dialog
   // opens or closes. Callers pass an inline arrow, which is a new function
@@ -213,6 +220,13 @@ export function OfferComposer({
                 ₺ {state.packageType === 'MONTHLY_4W' ? '/ 4 hafta' : '/ seans'}
               </span>
             </label>
+
+            {belowFloor && (
+              <p className="mt-2 text-sm text-bloom">
+                {belowFloorMessage(minPrice)} Koçun kendi fiyatının yarısının altındaki teklifler
+                gönderilemez.
+              </p>
+            )}
 
             <PriceBreakdown breakdown={breakdown} />
           </section>

@@ -12,6 +12,7 @@ import { startCheckout } from '@/server/services/payment-service';
 import { SlotUnavailableError } from '@/lib/booking/holds';
 import { createOffer } from '@/server/services/offer-service';
 import { checkRateLimit, RateLimitError } from '@/lib/rate-limit';
+import { belowFloorMessage, minOfferMinor, packageTypeForCadence } from '@/lib/offers/price-floor';
 
 /**
  * Negotiation actions.
@@ -296,6 +297,17 @@ export async function counterOffer(
   }
 
   const scope = (parent.scope ?? {}) as Record<string, unknown>;
+
+  const tiers = await prisma.pricingTier.findMany({
+    where: { coachProfileId: parent.coachProfileId, active: true },
+    select: { cadence: true, priceMinor: true, sessionsPerCycle: true },
+  });
+  const floor = minOfferMinor({
+    packageType: packageTypeForCadence(scope.cadence),
+    tiers,
+    role,
+  });
+  if (parsed.data.priceMinor < floor) return { ok: false, message: belowFloorMessage(floor) };
 
   try {
     const created = await createOffer({
