@@ -48,7 +48,13 @@ export function DisputeCard({ dispute }: { dispute: Dispute }) {
     .reduce((sum, m) => sum + m.amountMinor, 0);
 
   const noShows = dispute.engagement.bookings.filter((b) => b.status === 'NO_SHOW_COACH').length;
-  const completed = dispute.engagement.bookings.filter((b) => b.status === 'COMPLETED').length;
+  // Releasing a milestone marks its bookings COMPLETED even when their date
+  // hasn't come yet, so "held" must also mean "in the past". Sessions approved
+  // ahead of time are counted separately — that's evidence in its own right.
+  const now = Date.now();
+  const completedBookings = dispute.engagement.bookings.filter((b) => b.status === 'COMPLETED');
+  const completed = completedBookings.filter((b) => new Date(b.startsAt).getTime() <= now).length;
+  const approvedEarly = completedBookings.length - completed;
   const ageDays = Math.floor(
     (Date.now() - new Date(dispute.createdAt).getTime()) / 86_400_000,
   );
@@ -95,7 +101,11 @@ export function DisputeCard({ dispute }: { dispute: Dispute }) {
       <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border border-stone/70 bg-stone/60 sm:grid-cols-4">
         <Fact label="Donmuş tutar" value={formatTry(frozen)} strong />
         <Fact label="Aktarılmış" value={formatTry(released)} />
-        <Fact label="Yapılan seans" value={String(completed)} />
+        <Fact
+          label="Yapılan seans"
+          value={String(completed)}
+          note={approvedEarly > 0 ? `${approvedEarly} seans tarihi gelmeden onaylanmış` : undefined}
+        />
         <Fact label="Gelinmeyen" value={String(noShows)} />
       </dl>
 
@@ -171,13 +181,24 @@ export function DisputeCard({ dispute }: { dispute: Dispute }) {
   );
 }
 
-function Fact({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function Fact({
+  label,
+  value,
+  strong,
+  note,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  note?: string;
+}) {
   return (
     <div className="bg-paper px-4 py-3">
       <dt className="text-xs text-muted">{label}</dt>
       <dd className={`mt-0.5 tabular-nums ${strong ? 'font-display text-lg font-semibold' : 'font-medium'}`}>
         {value}
       </dd>
+      {note && <dd className="mt-0.5 text-xs text-bloom">{note}</dd>}
     </div>
   );
 }

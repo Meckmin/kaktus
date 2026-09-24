@@ -3,7 +3,13 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { approveCoach, rejectCoach, viewDocument } from '@/server/actions/admin';
-import { formatNetJourney, formatTry } from '@/lib/onboarding/client-state';
+import {
+  TRACK_LABELS,
+  TRACK_SHORT_CODES,
+  formatNetJourney,
+  formatTry,
+} from '@/lib/onboarding/client-state';
+import type { Track } from '@/lib/matching/types';
 
 interface ReviewCoach {
   id: string;
@@ -40,9 +46,19 @@ export function CoachReviewCard({ coach }: { coach: ReviewCoach }) {
   const [error, setError] = useState<string | null>(null);
 
   const open = async (documentId: string) => {
+    // Open the tab inside the click, then point it at the URL once it's signed.
+    // Calling window.open after the await loses the user gesture, and Safari's
+    // popup blocker silently swallows it.
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
     const result = await viewDocument(documentId);
-    if (result.ok) window.open(result.url, '_blank', 'noopener');
-    else setError(result.message);
+    if (result.ok) {
+      if (tab) tab.location.href = result.url;
+      else window.open(result.url, '_blank', 'noopener');
+    } else {
+      tab?.close();
+      setError(result.message);
+    }
   };
 
   const act = (fn: () => Promise<{ ok: boolean; message?: string }>) => {
@@ -71,8 +87,12 @@ export function CoachReviewCard({ coach }: { coach: ReviewCoach }) {
       {/* The claim to check, isolated and stated once. A reviewer comparing a
           document against a number should not have to hunt for the number. */}
       <dl className="mt-4 grid gap-px overflow-hidden rounded-xl border border-stone/70 bg-stone/60 sm:grid-cols-2">
-        <Fact label="Beyan edilen sıralama" value={`${coach.yksRank.toLocaleString('tr-TR')}. (${coach.yksYear})`} strong />
-        <Fact label="Alan" value={coach.yksTrack} />
+        <Fact
+          label="Beyan edilen sıralama"
+          value={`${TRACK_SHORT_CODES[coach.yksTrack as Track] ?? coach.yksTrack} ${coach.yksRank.toLocaleString('tr-TR')} (${coach.yksYear} YKS)`}
+          strong
+        />
+        <Fact label="Alan" value={TRACK_LABELS[coach.yksTrack as Track]?.full ?? coach.yksTrack} />
         <Fact label="Okul" value={`${coach.university} · ${coach.department}`} />
         <Fact
           label="Kendi net çıkışı"

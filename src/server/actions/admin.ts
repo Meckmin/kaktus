@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { resolveDispute } from '@/server/services/dispute-service';
-import { getDocumentUrl } from '@/lib/storage/private-storage';
+import { getDocumentUrl, isLocalDiskStorage } from '@/lib/storage/private-storage';
 import { registerSubmerchant, SubmerchantRegistrationError } from '@/server/services/submerchant-service';
 
 /**
@@ -190,6 +190,9 @@ export async function viewDocument(documentId: string): Promise<ViewDocumentResu
     select: { storageKey: true },
   });
   if (!document) return { ok: false, message: 'Belge bulunamadı.' };
+
+  // Local disk has no signed URLs; the dev-only viewer route serves by id.
+  if (isLocalDiskStorage()) return { ok: true, url: `/api/admin/belgeler/${documentId}` };
 
   try {
     const url = await getDocumentUrl(document.storageKey);

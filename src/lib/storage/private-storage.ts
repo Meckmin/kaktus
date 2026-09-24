@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve, sep } from 'node:path';
 import { env } from '@/lib/env';
 
 /**
@@ -207,6 +207,29 @@ export function getPrivateStorage(): PrivateStorage {
       : new LocalDiskStorage();
 
   return cached;
+}
+
+/** True when documents live on this machine's disk (development only). */
+export function isLocalDiskStorage(): boolean {
+  return getPrivateStorage().name === 'local-disk';
+}
+
+/**
+ * Reads a locally stored document, for the dev-only admin viewer route.
+ *
+ * Browsers won't open the file:// URL LocalDiskStorage hands out from an http
+ * page, so reviewers had no way to see a document locally. This takes a key
+ * that came from our own VerificationDocument row (never from a request), and
+ * still refuses anything that would resolve outside the upload root.
+ */
+export async function readLocalDocument(storageKey: string): Promise<Buffer> {
+  if (env.NODE_ENV === 'production' || !isLocalDiskStorage()) {
+    throw new Error('readLocalDocument is only available with local disk storage in development');
+  }
+  const root = join(process.cwd(), '.private-uploads');
+  const target = resolve(root, storageKey);
+  if (!target.startsWith(root + sep)) throw new Error('Refusing a path outside the upload root');
+  return readFile(target);
 }
 
 /** Convenience wrapper used by the admin verification queue. */
