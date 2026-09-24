@@ -76,7 +76,14 @@ export default async function CoachApplyPage({
         </p>
       </header>
 
-      <CoachApplicationForm displayName={session.user.name ?? ''} />
+      <CoachApplicationForm
+        displayName={session.user.name ?? ''}
+        draftKey={`kaktus.coach-apply.v1:${session.user.id}`}
+        initialDocuments={(status?.documents ?? []).map((doc) => ({
+          id: doc.id,
+          filename: 'ÖSYM sonuç belgen',
+        }))}
+      />
     </main>
   );
 }

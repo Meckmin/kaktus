@@ -12,7 +12,12 @@ import { useAuthGate } from '@/components/auth/AuthGate';
  */
 export function CoachSignInPrompt() {
   const { require } = useAuthGate();
-  const open = () => require({ action: 'Koç başvurusu yapmak', returnTo: '/koc-ol' });
+  const open = () =>
+    require({
+      action: 'Koç başvurusu yapmak',
+      returnTo: '/koc-ol',
+      note: 'E-postana bir giriş bağlantısı göndereceğiz. Bağlantıya tıkladığında başvuru formu açılır.',
+    });
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 sm:px-8">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   APPLY_STEPS,
@@ -28,7 +28,8 @@ import { ChoiceRow, NumberField, TextField } from '@/components/onboarding/contr
  *
  * Payout details are typed last and submitted immediately. They are never
  * autosaved as a draft: the shorter the window in which a TCKN sits in
- * un-submitted state, the better.
+ * un-submitted state, the better. Everything before them is autosaved to
+ * localStorage, so closing the tab on step 4 doesn't cost four steps of typing.
  */
 
 type Errors = Partial<Record<string, string[]>>;
@@ -83,17 +84,93 @@ const RENDERED_FIELDS: Record<string, string[]> = {
   ],
 };
 
-export function CoachApplicationForm({ displayName }: { displayName: string }) {
+/** Never written to browser storage — see the note at the top of this file. */
+const PAYOUT_FIELDS = RENDERED_FIELDS.odeme;
+
+type Draft = { stepIndex: number; form: Partial<CoachApplicationInput> };
+
+function withoutPayout(form: Partial<CoachApplicationInput>): Partial<CoachApplicationInput> {
+  const safe: Record<string, unknown> = { ...form };
+  for (const field of PAYOUT_FIELDS) delete safe[field];
+  return safe as Partial<CoachApplicationInput>;
+}
+
+function readDraft(key: string): Draft | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as Draft;
+    return { stepIndex: draft.stepIndex, form: withoutPayout(draft.form ?? {}) };
+  } catch {
+    // Private mode, blocked storage, or corrupted JSON: start fresh.
+    return null;
+  }
+}
+
+function writeDraft(key: string, draft: Draft): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ ...draft, form: withoutPayout(draft.form) }));
+  } catch {
+    /* non-fatal — the form still works, it just won't survive a closed tab */
+  }
+}
+
+function clearDraft(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    /* non-fatal */
+  }
+}
+
+export function CoachApplicationForm({
+  displayName,
+  draftKey,
+  initialDocuments = [],
+}: {
+  displayName: string;
+  /** Per-user localStorage key, so a shared browser never mixes two drafts. */
+  draftKey: string;
+  /** Documents already uploaded to this DRAFT profile in an earlier visit. */
+  initialDocuments?: Array<{ id: string; filename: string }>;
+}) {
   const router = useRouter();
   const [stepIndex, setStepIndex] = useState(0);
   const [form, setForm] = useState<CoachApplicationInput>({ ...EMPTY, legalName: displayName });
   const [errors, setErrors] = useState<Errors>({});
   const [stepBlocked, setStepBlocked] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<Array<{ id: string; filename: string }>>([]);
+  const [documents, setDocuments] = useState(initialDocuments);
+  const [restored, setRestored] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  // Restore after mount rather than in the initial state: localStorage doesn't
+  // exist during server rendering, and reading it there would mismatch hydration.
+  useEffect(() => {
+    const draft = readDraft(draftKey);
+    if (draft) {
+      setForm((current) => ({ ...current, ...draft.form }));
+      setStepIndex(Math.min(Math.max(0, draft.stepIndex || 0), APPLY_STEPS.length - 1));
+    }
+    setRestored(true);
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (restored) writeDraft(draftKey, { stepIndex, form });
+  }, [restored, draftKey, stepIndex, form]);
+
+  // Each step starts at its heading, not wherever the previous step's
+  // "Devam et" button happened to leave the scroll position.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    window.scrollTo({ top: 0 });
+  }, [stepIndex]);
 
   const step = APPLY_STEPS[stepIndex];
   const isLast = stepIndex === APPLY_STEPS.length - 1;
@@ -156,6 +233,7 @@ export function CoachApplicationForm({ displayName }: { displayName: string }) {
     startTransition(async () => {
       const result = await submitCoachApplication({ ...form, acceptedTerms: true });
       if (result.ok) {
+        clearDraft(draftKey);
         router.push('/koc-ol/tesekkurler');
         return;
       }

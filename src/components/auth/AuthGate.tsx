@@ -21,6 +21,8 @@ interface GateIntent {
   action: string;
   /** Where to return after sign-in. */
   returnTo: string;
+  /** Replaces the default line, which assumes a student who just did onboarding. */
+  note?: string;
 }
 
 interface AuthGateValue {
@@ -147,8 +149,8 @@ function AuthGateModal({ intent, onClose }: { intent: GateIntent; onClose: () =>
         ) : (
           <>
             <p className="mt-3 leading-relaxed text-muted">
-              Cevapladığın beş soru kayıtlı. Giriş yaptığında profilin otomatik oluşur ve tam
-              buraya geri dönersin.
+              {intent.note ??
+                'Cevapladığın beş soru kayıtlı. Giriş yaptığında profilin otomatik oluşur ve tam buraya geri dönersin.'}
             </p>
 
             <div className="mt-6 space-y-3">
