@@ -32,6 +32,7 @@
  */
 
 import { env } from '@/lib/env';
+import { verifyWebhookSignature, type IyzicoWebhookPayload } from './iyzico/signature';
 
 export type Currency = 'TRY';
 
@@ -186,15 +187,46 @@ export interface PaymentProvider {
  * unapproved items. It does NOT model 3DS, fraud review, or their retry
  * semantics — see LOCAL_PAYMENTS.md for what still needs sandbox testing.
  */
+type MockSession = { input: CheckoutInitInput; paymentId: string; items: ItemTransaction[] };
+type MockStore = {
+  sessions: Map<string, MockSession>;
+  approved: Set<string>;
+  refunded: Map<string, number>;
+};
+
+/**
+ * One mock store per Node process, on globalThis.
+ *
+ * Next compiles server actions and route handlers into separate module graphs,
+ * so per-instance state meant the webhook route got a different, empty mock
+ * from the one "Ödemeyi yap" initialized — every simulated payment came back
+ * MOCK_UNKNOWN_TOKEN and was marked FAILED.
+ */
+const mockGlobal = globalThis as unknown as { __kaktusMockPayments?: MockStore };
+function mockStore(): MockStore {
+  mockGlobal.__kaktusMockPayments ??= {
+    sessions: new Map(),
+    approved: new Set(),
+    refunded: new Map(),
+  };
+  return mockGlobal.__kaktusMockPayments;
+}
+
+/** Same default as scripts/simulate-payment.mjs, so the two agree out of the box. */
+const MOCK_WEBHOOK_SECRET_FALLBACK = 'sandbox-test-secret-key';
+
 export class MockPaymentProvider implements PaymentProvider {
   readonly name = 'mock';
 
-  private readonly sessions = new Map<
-    string,
-    { input: CheckoutInitInput; paymentId: string; items: ItemTransaction[] }
-  >();
-  private readonly approved = new Set<string>();
-  private readonly refunded = new Map<string, number>();
+  private readonly sessions: Map<string, MockSession>;
+  private readonly approved: Set<string>;
+  private readonly refunded: Map<string, number>;
+
+  constructor(store: MockStore = mockStore()) {
+    this.sessions = store.sessions;
+    this.approved = store.approved;
+    this.refunded = store.refunded;
+  }
 
   async createSubmerchant(input: SubmerchantInput): Promise<SubmerchantResult> {
     return { submerchantKey: `mock_sub_${input.coachProfileId}` };
@@ -278,8 +310,23 @@ export class MockPaymentProvider implements PaymentProvider {
     return { ok: true, providerRef: `mock_refund_${input.paymentTransactionId}` };
   }
 
-  verifyWebhook(): boolean {
-    return true;
+  /**
+   * Real HMAC verification, same as the Iyzico provider — this used to return
+   * true unconditionally, so forged webhooks were accepted locally and the
+   * simulator's --tamper check could never pass.
+   */
+  verifyWebhook(rawBody: string, headers: Record<string, string>): boolean {
+    let payload: IyzicoWebhookPayload;
+    try {
+      payload = JSON.parse(rawBody) as IyzicoWebhookPayload;
+    } catch {
+      return false;
+    }
+    return verifyWebhookSignature({
+      payload,
+      signature: headers['x-iyz-signature-v3'],
+      secretKey: env.IYZICO_SECRET_KEY ?? MOCK_WEBHOOK_SECRET_FALLBACK,
+    });
   }
 
   /** Test helper. */
@@ -304,6 +351,16 @@ export function getPaymentProvider(): PaymentProvider {
       requireSignature: env.NODE_ENV === 'production',
     });
     return cached;
+  }
+
+  // The mock captures "payments" without charging anyone. In production that
+  // would mark offers paid for free — a forgotten PAYMENT_PROVIDER must stop
+  // the payment path, not quietly default into it.
+  if (env.NODE_ENV === 'production' && process.env.ALLOW_MOCK_PAYMENTS !== '1') {
+    throw new Error(
+      'PAYMENT_PROVIDER is "mock" in production. Set PAYMENT_PROVIDER=iyzico, ' +
+        'or ALLOW_MOCK_PAYMENTS=1 for a deliberate staging/demo deploy.',
+    );
   }
 
   cached = new MockPaymentProvider();
