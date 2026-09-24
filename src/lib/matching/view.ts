@@ -30,6 +30,8 @@ export interface CoachMatchView {
   caveats: string[];
   breakdown: MatchBreakdown[];
   priceFromMinor: number | null;
+  /** What priceFromMinor buys: a monthly package, or one session when that's all the coach sells. */
+  priceUnit: 'ay' | 'seans';
   ratingAvg: number;
   ratingCount: number;
   journey: {
@@ -62,9 +64,7 @@ export function toCoachMatchView(result: MatchResult, coach: CoachCandidate): Co
         label: DIMENSION_LABELS[d.dimension] ?? d.dimension,
         percent: Math.round(d.score * 100),
       })),
-    priceFromMinor: coach.pricing.length
-      ? Math.min(...coach.pricing.map((p) => p.priceMinor))
-      : null,
+    ...startingPrice(coach.pricing),
     ratingAvg: coach.stats.ratingAvg,
     ratingCount: coach.stats.ratingCount,
     journey: {
@@ -76,4 +76,22 @@ export function toCoachMatchView(result: MatchResult, coach: CoachCandidate): Co
       track: coach.journey.track,
     },
   };
+}
+
+/**
+ * "From X ₺/ay" must quote a package, not the trial session — otherwise a coach
+ * charging 6.000 ₺/month read as "600 ₺/ay" next to a caveat saying they were
+ * over budget. The single-session price is only used when there's nothing else.
+ */
+function startingPrice(
+  pricing: CoachCandidate['pricing'],
+): Pick<CoachMatchView, 'priceFromMinor' | 'priceUnit'> {
+  const packages = pricing.filter((p) => p.cadence !== 'SINGLE_SESSION');
+  if (packages.length > 0) {
+    return { priceFromMinor: Math.min(...packages.map((p) => p.priceMinor)), priceUnit: 'ay' };
+  }
+  if (pricing.length > 0) {
+    return { priceFromMinor: Math.min(...pricing.map((p) => p.priceMinor)), priceUnit: 'seans' };
+  }
+  return { priceFromMinor: null, priceUnit: 'ay' };
 }

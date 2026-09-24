@@ -170,6 +170,29 @@ describe('match pills', () => {
     });
   });
 
+  it('quotes a monthly package, never the trial session, as the starting price', () => {
+    const withTrial = {
+      ...coach,
+      pricing: [
+        { cadence: 'MONTHLY_STANDARD', priceMinor: 600_000 },
+        { cadence: 'SINGLE_SESSION', priceMinor: 60_000 },
+      ],
+    } as CoachCandidate;
+    const trialView = toCoachMatchView(result, withTrial);
+    expect(trialView.priceFromMinor).toBe(600_000);
+    expect(trialView.priceUnit).toBe('ay');
+  });
+
+  it('falls back to a per-session price when that is all the coach sells', () => {
+    const trialOnly = {
+      ...coach,
+      pricing: [{ cadence: 'SINGLE_SESSION', priceMinor: 60_000 }],
+    } as CoachCandidate;
+    const trialView = toCoachMatchView(result, trialOnly);
+    expect(trialView.priceFromMinor).toBe(60_000);
+    expect(trialView.priceUnit).toBe('seans');
+  });
+
   it('shows the cheapest package as the starting price', () => {
     const multi = {
       ...coach,

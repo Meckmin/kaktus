@@ -102,7 +102,7 @@ export function CoachMatchCard({
           {coach.priceFromMinor != null && (
             <>
               <span className="font-medium text-ink">{formatTry(coach.priceFromMinor)}</span>
-              {' /ay’dan başlıyor'}
+              {coach.priceUnit === 'seans' ? ' /seans' : ' /ay’dan başlıyor'}
             </>
           )}
         </span>
