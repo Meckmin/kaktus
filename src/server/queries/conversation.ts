@@ -261,7 +261,13 @@ export async function listConversations() {
       student: { select: { user: { select: { name: true } } } },
       messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { body: true, senderId: true } },
       offers: {
-        where: { status: { in: ['OFFERED', 'COUNTERED', 'ACCEPTED'] } },
+        // A countered offer has been replaced by its child; without the
+        // counterOffers check, once the child settled (paid, refunded) the
+        // list fell back to the stale parent and showed it as awaiting a reply.
+        where: {
+          status: { in: ['OFFERED', 'COUNTERED', 'ACCEPTED'] },
+          counterOffers: { none: {} },
+        },
         orderBy: { createdAt: 'desc' },
         take: 1,
         select: { id: true, status: true, priceMinor: true, initiatorRole: true },
