@@ -71,9 +71,18 @@ export function OfferComposer({
   const slotsNeeded = config.sessions;
   const ready = state.slots.length === slotsNeeded && state.priceMinor > 0;
 
+  // Read onClose through a ref so the effect below runs only when the dialog
+  // opens or closes. Callers pass an inline arrow, which is a new function
+  // every render; with it as a dependency, each keystroke re-ran the effect and
+  // `focus()` pulled focus off the price input after the first digit.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
+    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onCloseRef.current();
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     panelRef.current?.focus();
@@ -81,7 +90,7 @@ export function OfferComposer({
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

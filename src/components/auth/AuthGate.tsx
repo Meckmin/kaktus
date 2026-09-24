@@ -72,12 +72,20 @@ function AuthGateModal({ intent, onClose }: { intent: GateIntent; onClose: () =>
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
+  // Through a ref, so the effect below runs once per open rather than on every
+  // parent render — re-running it would yank focus back to the close button
+  // mid-typing (the same bug OfferComposer had).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   // Focus management and Escape. A modal that traps neither is unusable by
   // keyboard and invisible to a screen reader.
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
       if (event.key !== 'Tab') return;
       const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
         'button, input, a[href]',
@@ -99,7 +107,7 @@ function AuthGateModal({ intent, onClose }: { intent: GateIntent; onClose: () =>
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [onClose]);
+  }, []);
 
   const sendLink = async () => {
     if (!email.includes('@')) return;
