@@ -775,8 +775,46 @@ describe('submitReviewAction', () => {
 
     expect(result).toEqual({
       ok: false,
-      message: 'Değerlendirme yalnızca program tamamlandıktan sonra yazılabilir.',
+      message:
+        'Değerlendirme, program tamamlandıktan ya da en az bir ders yapıldıktan sonra yazılabilir.',
     });
+  });
+
+  it('lets a student review a program that ended early after a released lesson, labelled as such', async () => {
+    const { studentUser, engagement } = await fundedEngagement();
+    await prisma.milestone.update({
+      where: { id: engagement.milestones[0].id },
+      data: { status: 'RELEASED', releasedAt: new Date() },
+    });
+    await prisma.engagement.update({ where: { id: engagement.id }, data: { status: 'CANCELLED' } });
+    asUser(studentUser.id);
+
+    const result = await submitReviewAction(engagement.id, { rating: 2, body: 'yarıda bıraktık' });
+
+    expect(result).toEqual({ ok: true });
+    const review = await prisma.review.findFirstOrThrow({ where: { engagementId: engagement.id } });
+    expect(review.programIncomplete).toBe(true);
+  });
+
+  it('refuses a review on a program cancelled before any lesson happened', async () => {
+    const { studentUser, engagement } = await fundedEngagement();
+    await prisma.engagement.update({ where: { id: engagement.id }, data: { status: 'CANCELLED' } });
+    asUser(studentUser.id);
+
+    const result = await submitReviewAction(engagement.id, { rating: 1 });
+
+    expect(result.ok).toBe(false);
+    expect(await prisma.review.count({ where: { engagementId: engagement.id } })).toBe(0);
+  });
+
+  it('marks a completed program\'s review as complete', async () => {
+    const { studentUser, engagement } = await completedEngagement();
+    asUser(studentUser.id);
+
+    await submitReviewAction(engagement.id, { rating: 5 });
+
+    const review = await prisma.review.findFirstOrThrow({ where: { engagementId: engagement.id } });
+    expect(review.programIncomplete).toBe(false);
   });
 
   it('refuses a caller who is not the student on the engagement', async () => {

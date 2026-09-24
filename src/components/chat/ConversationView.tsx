@@ -81,12 +81,13 @@ export function ConversationView({ conversation }: { conversation: ConversationV
       )}
 
       {conversation.engagement &&
-        conversation.engagement.status === 'COMPLETED' &&
+        conversation.engagement.reviewEligibility &&
         conversation.viewerRole === 'STUDENT' && (
           <ReviewPanel
             engagementId={conversation.engagement.id}
             counterpartyName={conversation.counterpartyName}
             reviewed={conversation.engagement.reviewed}
+            incomplete={conversation.engagement.reviewEligibility === 'INCOMPLETE'}
             onSubmitted={() => router.refresh()}
           />
         )}
@@ -616,11 +617,14 @@ function ReviewPanel({
   engagementId,
   counterpartyName,
   reviewed,
+  incomplete,
   onSubmitted,
 }: {
   engagementId: string;
   counterpartyName: string;
   reviewed: boolean;
+  /** The program ended early; the review will carry a label saying so. */
+  incomplete: boolean;
   onSubmitted: () => void;
 }) {
   const [rating, setRating] = useState(0);
@@ -667,7 +671,9 @@ function ReviewPanel({
         {counterpartyName} ile ilgili deneyimini değerlendir
       </h2>
       <p className="mt-1 text-sm text-muted">
-        Programın tamamlandı. Değerlendirmen diğer öğrencilere yardımcı olur.
+        {incomplete
+          ? 'Program yarıda kaldı. Yaşadıklarını dürüstçe yazman diğer öğrencilere yardımcı olur; değerlendirmen profilde “Program yarıda kaldı” etiketiyle görünür.'
+          : 'Programın tamamlandı. Değerlendirmen diğer öğrencilere yardımcı olur.'}
       </p>
 
       <div className="mt-4 flex gap-1.5">

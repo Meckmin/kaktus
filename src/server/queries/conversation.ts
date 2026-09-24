@@ -1,6 +1,11 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { milestoneCompletableAt } from '@/lib/offers/scope';
+import {
+  RESOLVED_DISPUTE_STATUSES,
+  reviewEligibility,
+  type ReviewEligibility,
+} from '@/lib/reviews/eligibility';
 import { availableEvents, type OfferStatus } from '@/lib/offers/state-machine';
 
 /**
@@ -73,6 +78,8 @@ export interface ConversationView {
     status: string;
     milestones: MilestoneEntry[];
     reviewed: boolean;
+    /** Whether the student may review it, and whether it'd be marked as ended early. */
+    reviewEligibility: ReviewEligibility;
   } | null;
 }
 
@@ -134,6 +141,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
                 },
               },
               review: { select: { id: true } },
+              disputes: { where: { status: { in: [...RESOLVED_DISPUTE_STATUSES] } }, select: { id: true } },
             },
           },
         },
@@ -233,6 +241,12 @@ export async function getConversation(conversationId: string): Promise<Conversat
           }),
         ),
         reviewed: Boolean(paidOffer.engagement.review),
+        reviewEligibility: reviewEligibility({
+          status: paidOffer.engagement.status,
+          releasedMilestones: paidOffer.engagement.milestones.filter((m) => m.status === 'RELEASED')
+            .length,
+          resolvedDisputes: paidOffer.engagement.disputes.length,
+        }),
       }
     : null;
 

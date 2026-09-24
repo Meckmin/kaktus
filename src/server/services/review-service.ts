@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { TX_OPTIONS, acquireAdvisoryLock } from '@/lib/tx';
+import { RESOLVED_DISPUTE_STATUSES, reviewEligibility } from '@/lib/reviews/eligibility';
 
 /**
  * Student reviews, written once an engagement completes.
@@ -55,15 +56,26 @@ export async function submitReview(input: SubmitReviewInput): Promise<SubmittedR
       review: { select: { id: true } },
       coach: { select: { slug: true } },
       offer: { select: { conversationId: true } },
+      _count: {
+        select: {
+          milestones: { where: { status: 'RELEASED' } },
+          disputes: { where: { status: { in: [...RESOLVED_DISPUTE_STATUSES] } } },
+        },
+      },
     },
   });
   if (!engagement) throw new ReviewActionError('Program bulunamadı.', 'NOT_FOUND');
   if (engagement.student.userId !== input.studentUserId) {
     throw new ReviewActionError('Bu program için değerlendirme yazamazsın.', 'FORBIDDEN');
   }
-  if (engagement.status !== 'COMPLETED') {
+  const eligibility = reviewEligibility({
+    status: engagement.status,
+    releasedMilestones: engagement._count.milestones,
+    resolvedDisputes: engagement._count.disputes,
+  });
+  if (!eligibility) {
     throw new ReviewActionError(
-      'Değerlendirme yalnızca program tamamlandıktan sonra yazılabilir.',
+      'Değerlendirme, program tamamlandıktan ya da en az bir ders yapıldıktan sonra yazılabilir.',
       'WRONG_STATE',
     );
   }
@@ -83,6 +95,7 @@ export async function submitReview(input: SubmitReviewInput): Promise<SubmittedR
           rating: input.rating,
           body: input.body ?? null,
           netGainReported: input.netGainReported ?? null,
+          programIncomplete: eligibility === 'INCOMPLETE',
         },
       });
 

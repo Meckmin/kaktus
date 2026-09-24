@@ -210,6 +210,11 @@ function Reviews({ coach }: { coach: NonNullable<Awaited<ReturnType<typeof getCo
                 +{Math.round(review.netGainReported)} net
               </p>
             )}
+            {review.programIncomplete && (
+              <p className="mt-2 inline-block rounded-full border border-stone/70 px-2.5 py-0.5 text-xs text-muted">
+                Program yarıda kaldı
+              </p>
+            )}
             {review.body && <p className="mt-2 leading-relaxed">{review.body}</p>}
             <time
               dateTime={review.createdAt.toISOString()}

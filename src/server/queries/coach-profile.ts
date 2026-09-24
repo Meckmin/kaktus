@@ -69,6 +69,7 @@ export interface CoachProfileView {
     netGainReported: number | null;
     createdAt: Date;
     studentInitials: string;
+    programIncomplete: boolean;
   }>;
   commissionBps: number;
 }
@@ -134,6 +135,7 @@ export async function getCoachProfile(slug: string): Promise<CoachProfileView | 
           body: true,
           netGainReported: true,
           createdAt: true,
+          programIncomplete: true,
           student: { select: { user: { select: { name: true } } } },
         },
       },
@@ -203,6 +205,7 @@ export async function getCoachProfile(slug: string): Promise<CoachProfileView | 
       // Students are minors. Reviews show initials only — never a full name,
       // and never anything that ties a review to a school or a city.
       studentInitials: initials(review.student.user.name),
+      programIncomplete: review.programIncomplete,
     })),
     commissionBps: coach.commissionBpsOverride ?? policy?.defaultBps ?? DEFAULT_COMMISSION_BPS,
   };

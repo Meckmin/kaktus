@@ -955,6 +955,9 @@ model Review {
   published       Boolean @default(true)
   /// Net gain reported at the end of the engagement — feeds trajectory scoring.
   netGainReported Float?
+  /// Written on a program that ended early (cancelled after at least one
+  /// released lesson, or closed by a dispute). Shown as "Program yarıda kaldı".
+  programIncomplete Boolean @default(false)
 
   createdAt DateTime @default(now())
 
