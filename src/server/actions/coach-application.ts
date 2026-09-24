@@ -212,14 +212,11 @@ export async function submitCoachApplication(
     };
   }
 
-  const user = await prisma.user.findUniqueOrThrow({
-    where: { id: session.user.id },
-    select: { name: true },
-  });
-
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const slug = await uniqueSlug(tx, user.name ?? data.legalName);
+      // From the public display name only — never legalName, which is a payout
+      // detail and would otherwise end up in the profile URL.
+      const slug = await uniqueSlug(tx, data.displayName);
 
       const coach = existing
         ? await tx.coachProfile.update({
@@ -315,7 +312,7 @@ export async function submitCoachApplication(
 
       await tx.user.update({
         where: { id: session.user.id! },
-        data: { roles: { set: ['STUDENT', 'COACH'] } },
+        data: { roles: { set: ['STUDENT', 'COACH'] }, name: data.displayName },
       });
 
       await tx.auditLog.create({

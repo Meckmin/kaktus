@@ -35,6 +35,7 @@ import { ChoiceRow, NumberField, TextField } from '@/components/onboarding/contr
 type Errors = Partial<Record<string, string[]>>;
 
 const EMPTY: CoachApplicationInput = {
+  displayName: '',
   university: '',
   department: '',
   yksTrack: 'SAYISAL',
@@ -74,7 +75,7 @@ const EMPTY: CoachApplicationInput = {
  * an unresponsive button.
  */
 const RENDERED_FIELDS: Record<string, string[]> = {
-  kimlik: ['university', 'department', 'yksTrack', 'yksRank', 'yksYear', 'graduationYear'],
+  kimlik: ['displayName', 'university', 'department', 'yksTrack', 'yksRank', 'yksYear', 'graduationYear'],
   yontem: ['headline', 'bio', 'styles', 'tracks', 'supportedGrades'],
   ucret: ['monthlyPriceMinor', 'sessionPriceMinor', 'maxActiveStudents', 'weeklyCapacityHours'],
   takvim: ['availability'],
@@ -136,7 +137,11 @@ export function CoachApplicationForm({
 }) {
   const router = useRouter();
   const [stepIndex, setStepIndex] = useState(0);
-  const [form, setForm] = useState<CoachApplicationInput>({ ...EMPTY, legalName: displayName });
+  const [form, setForm] = useState<CoachApplicationInput>({
+    ...EMPTY,
+    displayName,
+    legalName: displayName,
+  });
   const [errors, setErrors] = useState<Errors>({});
   const [stepBlocked, setStepBlocked] = useState<string | null>(null);
   const [documents, setDocuments] = useState(initialDocuments);
@@ -394,6 +399,17 @@ function CredentialsStep({
 }) {
   return (
     <>
+      <div className="max-w-md">
+        <TextField
+          label="Profilde görünecek adın"
+          hint="Öğrenciler seni bu adla görür. Tam adını ya da “Elif Ş.” gibi kısaltılmış hâlini yazabilirsin."
+          value={form.displayName}
+          onChange={(v) => set({ displayName: v ?? '' })}
+          placeholder="Elif Ş."
+        />
+        <FieldError errors={errors} field="displayName" />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <TextField

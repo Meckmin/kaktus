@@ -73,6 +73,7 @@ const {
 } = await import('@/server/actions/milestones');
 const { approveCoach, resolveDisputeAction } = await import('@/server/actions/admin');
 const { submitOffer } = await import('@/server/actions/offers');
+const { submitCoachApplication } = await import('@/server/actions/coach-application');
 const { submitReviewAction } = await import('@/server/actions/reviews');
 
 beforeEach(async () => {
@@ -305,7 +306,7 @@ describe('counterOffer', () => {
     asUser(coachUser.id);
     const coachCounter = await counterOffer(offer.id, { priceMinor: 150_000 });
     expect(coachCounter.ok).toBe(true);
-    if (!coachCounter.ok) throw new Error('unreachable');
+    if (!coachCounter.ok || !coachCounter.offerId) throw new Error('unreachable');
 
     // The student can't push it under half the list price (2.000 ₺).
     asUser(studentUser.id);
@@ -794,5 +795,65 @@ describe('submitReviewAction', () => {
     const result = await submitReviewAction(engagement.id, { rating: 9 });
 
     expect(result).toEqual({ ok: false, message: 'Geçerli bir puan seç.' });
+  });
+});
+
+describe('submitCoachApplication', () => {
+  // Checksum-valid dummies (same algorithm as lib/coach/identifiers), not real people.
+  const application = {
+    displayName: 'Elif Ş.',
+    university: 'Hacettepe Üniversitesi',
+    department: 'Tıp',
+    yksTrack: 'SAYISAL' as const,
+    yksRank: 2400,
+    yksYear: 2025,
+    wasMezun: false,
+    headline: 'Mezun yılımda ilk 2.500e çıktım',
+    bio: 'Her hafta programı birlikte çıkarıyoruz; denemelerden sonra konu konu analiz yapıyor, en çok puan getirecek konuları öne alıyoruz. Hafta içi mesajla takip ediyorum.',
+    styles: ['STRICT' as const],
+    tracks: ['SAYISAL' as const],
+    subjects: [],
+    supportedGrades: ['MEZUN' as const],
+    monthlyPriceMinor: 400_000,
+    sessionsPerMonth: 4,
+    minutesPerSession: 60,
+    maxActiveStudents: 8,
+    availability: [{ weekday: 1, startMinute: 18 * 60, endMinute: 21 * 60 }],
+    submerchantType: 'PERSONAL' as const,
+    legalName: 'Gizli Yasal Ad',
+    identityNumber: '12345678950',
+    iban: 'TR330006100519786457841326',
+    address: 'Test Mah. Deneme Sok. No:1',
+    city: 'Ankara',
+    phone: '05551112233',
+    acceptedTerms: true as const,
+  };
+
+  it('publishes the display name and keeps the legal name out of the profile URL', async () => {
+    const { user } = await makeStudent();
+    await prisma.user.update({ where: { id: user.id }, data: { name: null } });
+    asUser(user.id);
+
+    const result = await submitCoachApplication(application);
+
+    expect(result.ok).toBe(true);
+    const after = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: { name: true, coachProfile: { select: { slug: true } } },
+    });
+    expect(after.name).toBe('Elif Ş.');
+    expect(after.coachProfile?.slug).toMatch(/^elif-s/);
+    expect(after.coachProfile?.slug).not.toContain('gizli');
+  });
+
+  it('requires a display name', async () => {
+    const { user } = await makeStudent();
+    asUser(user.id);
+
+    const result = await submitCoachApplication({ ...application, displayName: ' ' });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.fieldErrors?.displayName).toBeDefined();
   });
 });

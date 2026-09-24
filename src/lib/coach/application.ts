@@ -39,6 +39,14 @@ export const weeklyWindowSchema = z.object({
 
 export const coachApplicationSchema = z.object({
   // ── Credentials ──
+  // What students see on cards, the profile and in chat. Separate from
+  // legalName, which is a payout detail and must never reach a public page
+  // (it used to seed the profile URL slug).
+  displayName: z
+    .string()
+    .trim()
+    .min(2, 'Profilde görünecek adını yaz')
+    .max(60, 'En fazla 60 karakter'),
   university: z.string().min(2, 'Üniversite gerekli').max(120),
   department: z.string().min(2, 'Bölüm gerekli').max(120),
   graduationYear: z.number().int().min(1990).max(2100).nullable().optional(),
@@ -96,7 +104,7 @@ export type CoachApplication = z.output<typeof coachApplicationSchema>;
 
 /** Per-step field lists, so the wizard can validate one step at a time. */
 export const STEP_FIELDS: Record<ApplyStep, Array<keyof CoachApplication>> = {
-  kimlik: ['university', 'department', 'yksTrack', 'yksRank', 'yksYear'],
+  kimlik: ['displayName', 'university', 'department', 'yksTrack', 'yksRank', 'yksYear'],
   yontem: ['headline', 'bio', 'styles', 'tracks', 'supportedGrades'],
   ucret: ['monthlyPriceMinor', 'maxActiveStudents'],
   takvim: ['availability'],
