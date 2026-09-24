@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
@@ -13,6 +14,7 @@ import { SlotUnavailableError } from '@/lib/booking/holds';
 import { createOffer } from '@/server/services/offer-service';
 import { checkRateLimit, RateLimitError } from '@/lib/rate-limit';
 import { belowFloorMessage, minOfferMinor, packageTypeForCadence } from '@/lib/offers/price-floor';
+import { buyerDetailsSchema, type BuyerDetailsInput } from '@/lib/payments/buyer';
 
 /**
  * Negotiation actions.
@@ -347,7 +349,7 @@ export async function counterOffer(
 
 export type CheckoutResult =
   | { ok: true; checkoutFormContent: string; token: string }
-  | { ok: false; message: string };
+  | { ok: false; message: string; fieldErrors?: Record<string, string[]> };
 
 /**
  * Opens payment for an accepted offer.
@@ -356,7 +358,19 @@ export type CheckoutResult =
  * again inside the payment service, because this is the single point where the
  * product starts handling real money.
  */
-export async function payForOffer(offerId: string): Promise<CheckoutResult> {
+export async function payForOffer(
+  offerId: string,
+  buyerInput: BuyerDetailsInput,
+): Promise<CheckoutResult> {
+  const buyer = buyerDetailsSchema.safeParse(buyerInput);
+  if (!buyer.success) {
+    return {
+      ok: false,
+      message: 'Ödeme bilgilerinde eksik ya da hatalı alan var.',
+      fieldErrors: buyer.error.flatten().fieldErrors as Record<string, string[]>,
+    };
+  }
+
   const offer = await prisma.offer.findUnique({
     where: { id: offerId },
     select: {
@@ -376,22 +390,19 @@ export async function payForOffer(offerId: string): Promise<CheckoutResult> {
     return { ok: false, message: 'Ödeme yalnızca kabul edilmiş teklifler için yapılabilir.' };
   }
 
-  const [name, ...rest] = (offer.student.user.name ?? 'Öğrenci').split(' ');
+  // Iyzico's fraud checks use the buyer's IP; the first x-forwarded-for hop is
+  // the client behind our proxy. Localhost only when there is no proxy at all.
+  const forwarded = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim();
 
   try {
     const session = await startCheckout({
       offerId,
       studentUserId: userId,
+      // Passed through to the provider only — not persisted anywhere.
       buyer: {
-        name,
-        surname: rest.join(' ') || name,
+        ...buyer.data,
         email: offer.student.user.email ?? 'ogrenci@kaktuskocluk.com',
-        // Iyzico requires an identity number. Collected on the payment screen
-        // in production; this placeholder keeps the sandbox path working.
-        identityNumber: '11111111111',
-        ip: '127.0.0.1',
-        city: 'İstanbul',
-        address: 'Belirtilmedi',
+        ip: forwarded || '127.0.0.1',
       },
       callbackUrl: `${env.APP_URL}/api/payments/callback`,
     });

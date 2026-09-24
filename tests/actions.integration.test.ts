@@ -52,7 +52,9 @@ vi.mock('next/headers', () => {
     set: (name: string, value: string) => store.set(name, value),
     delete: (name: string) => store.delete(name),
   };
-  return { cookies: async () => jar };
+  // payForOffer reads x-forwarded-for for the buyer IP Iyzico requires.
+  const requestHeaders = new Headers({ 'x-forwarded-for': '203.0.113.7' });
+  return { cookies: async () => jar, headers: async () => requestHeaders };
 });
 
 function asUser(userId: string) {
@@ -324,13 +326,23 @@ describe('counterOffer', () => {
 });
 
 describe('payForOffer', () => {
+  // Checksum-valid dummy identity, not a real person.
+  const BUYER = {
+    name: 'Ayşe',
+    surname: 'Yılmaz',
+    identityNumber: '12345678950',
+    gsmNumber: '0555 111 22 33',
+    city: 'İstanbul',
+    address: 'Test Mah. Deneme Sok. No:1 Kadıköy',
+  };
+
   it('opens checkout for the student on an accepted offer', async () => {
     const { coachUser, studentUser, offer } = await openOffer();
     asUser(coachUser.id);
     await acceptOffer(offer.id);
     asUser(studentUser.id);
 
-    const result = await payForOffer(offer.id);
+    const result = await payForOffer(offer.id, BUYER);
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('unreachable');
@@ -342,7 +354,7 @@ describe('payForOffer', () => {
     asUser(coachUser.id);
     await acceptOffer(offer.id);
 
-    const result = await payForOffer(offer.id);
+    const result = await payForOffer(offer.id, BUYER);
 
     expect(result).toEqual({ ok: false, message: 'Ödemeyi yalnızca öğrenci yapabilir.' });
   });
@@ -351,12 +363,40 @@ describe('payForOffer', () => {
     const { studentUser, offer } = await openOffer();
     asUser(studentUser.id);
 
-    const result = await payForOffer(offer.id);
+    const result = await payForOffer(offer.id, BUYER);
 
     expect(result).toEqual({
       ok: false,
       message: 'Ödeme yalnızca kabul edilmiş teklifler için yapılabilir.',
     });
+  });
+
+  it('rejects invalid payer details field by field, before opening checkout', async () => {
+    const { coachUser, studentUser, offer } = await openOffer();
+    asUser(coachUser.id);
+    await acceptOffer(offer.id);
+    asUser(studentUser.id);
+
+    const result = await payForOffer(offer.id, { ...BUYER, identityNumber: '12345678901', gsmNumber: '123' });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.fieldErrors?.identityNumber).toBeDefined();
+    expect(result.fieldErrors?.gsmNumber).toBeDefined();
+    expect(await prisma.payment.count({ where: { offerId: offer.id } })).toBe(0);
+  });
+
+  it('does not store the payer\'s identity anywhere on the payment', async () => {
+    const { coachUser, studentUser, offer } = await openOffer();
+    asUser(coachUser.id);
+    await acceptOffer(offer.id);
+    asUser(studentUser.id);
+
+    await payForOffer(offer.id, BUYER);
+
+    const payment = await prisma.payment.findFirstOrThrow({ where: { offerId: offer.id } });
+    expect(JSON.stringify(payment)).not.toContain(BUYER.identityNumber);
+    expect(JSON.stringify(payment)).not.toContain('Kadıköy');
   });
 });
 

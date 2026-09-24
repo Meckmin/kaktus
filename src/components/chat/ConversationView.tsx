@@ -6,6 +6,7 @@ import type { ConversationView, MilestoneEntry, TimelineEntry } from '@/server/q
 import { OFFER_STATUS_TR } from '@/lib/offers/state-machine';
 import { formatTry } from '@/lib/onboarding/client-state';
 import { computeBreakdown } from '@/lib/offers/draft';
+import { buyerDetailsSchema, type BuyerDetailsInput } from '@/lib/payments/buyer';
 import {
   acceptOffer,
   counterOffer,
@@ -105,8 +106,8 @@ export function ConversationView({ conversation }: { conversation: ConversationV
               onAccept={() => run(() => acceptOffer(entry.id))}
               onDecline={() => run(() => declineOffer(entry.id))}
               onCounter={(priceMinor, note) => run(() => counterOffer(entry.id, { priceMinor, note }))}
-              onPay={() => run(async () => {
-                const result = await payForOffer(entry.id);
+              onPay={(buyer) => run(async () => {
+                const result = await payForOffer(entry.id, buyer);
                 if (!result.ok) return result;
                 // Iyzico returns a script that renders its own hosted form.
                 const holder = document.getElementById('iyzico-checkout');
@@ -210,9 +211,10 @@ function OfferBlock({
   onAccept: () => void;
   onDecline: () => void;
   onCounter: (priceMinor: number, note?: string) => void;
-  onPay: () => void;
+  onPay: (buyer: BuyerDetailsInput) => void;
 }) {
   const [countering, setCountering] = useState(false);
+  const [paying, setPaying] = useState(false);
   const [price, setPrice] = useState(String(Math.round(entry.priceMinor / 100)));
   const [note, setNote] = useState('');
 
@@ -271,7 +273,7 @@ function OfferBlock({
             {canPay && (
               <button
                 type="button"
-                onClick={onPay}
+                onClick={() => setPaying((open) => !open)}
                 disabled={pending}
                 className="rounded-full bg-cactus px-5 py-2.5 text-sm font-medium text-paper hover:bg-cactus-deep disabled:bg-stone"
               >
@@ -311,6 +313,10 @@ function OfferBlock({
           </div>
         )}
 
+        {canPay && paying && !entry.superseded && (
+          <BuyerForm amountMinor={entry.priceMinor} pending={pending} onSubmit={onPay} />
+        )}
+
         {countering && (
           <div className="mt-5 border-t border-stone/60 pt-5">
             <label className="block text-sm font-medium">Karşı teklifin</label>
@@ -347,6 +353,109 @@ function OfferBlock({
         )}
       </article>
     </li>
+  );
+}
+
+const BUYER_FIELDS: Array<{
+  key: keyof BuyerDetailsInput;
+  label: string;
+  placeholder: string;
+  inputMode?: 'numeric' | 'tel';
+  autoComplete: string;
+  maxLength?: number;
+  wide?: boolean;
+}> = [
+  { key: 'name', label: 'Ad', placeholder: 'Ayşe', autoComplete: 'given-name' },
+  { key: 'surname', label: 'Soyad', placeholder: 'Yılmaz', autoComplete: 'family-name' },
+  { key: 'identityNumber', label: 'TC kimlik no', placeholder: '11 hane', inputMode: 'numeric', autoComplete: 'off', maxLength: 11 },
+  { key: 'gsmNumber', label: 'Cep telefonu', placeholder: '05XX XXX XX XX', inputMode: 'tel', autoComplete: 'tel' },
+  { key: 'city', label: 'Şehir', placeholder: 'İstanbul', autoComplete: 'address-level1' },
+  { key: 'address', label: 'Açık adres', placeholder: 'Mahalle, sokak, no, ilçe', autoComplete: 'street-address', wide: true },
+];
+
+/**
+ * Payer details for Iyzico, asked at the moment of paying.
+ *
+ * Framed as "the person paying" rather than "you", because most students are
+ * minors and a parent paying under their own identity is the normal case.
+ * Nothing here is saved — not in the database, not in browser storage — it goes
+ * to the server action and on to the provider.
+ */
+function BuyerForm({
+  amountMinor,
+  pending,
+  onSubmit,
+}: {
+  amountMinor: number;
+  pending: boolean;
+  onSubmit: (buyer: BuyerDetailsInput) => void;
+}) {
+  const [values, setValues] = useState<BuyerDetailsInput>({
+    name: '',
+    surname: '',
+    identityNumber: '',
+    gsmNumber: '',
+    city: '',
+    address: '',
+  });
+  const [errors, setErrors] = useState<Partial<Record<keyof BuyerDetailsInput, string>>>({});
+
+  const submit = () => {
+    const parsed = buyerDetailsSchema.safeParse(values);
+    if (!parsed.success) {
+      const flat = parsed.error.flatten().fieldErrors;
+      setErrors(
+        Object.fromEntries(Object.entries(flat).map(([key, messages]) => [key, messages?.[0]])),
+      );
+      return;
+    }
+    setErrors({});
+    onSubmit(values);
+  };
+
+  return (
+    <div className="mt-5 border-t border-stone/60 pt-5">
+      <h4 className="font-medium">Ödemeyi yapan kişinin bilgileri</h4>
+      <p className="mt-1 text-sm leading-relaxed text-muted">
+        Ödeme kuruluşu İyzico bu bilgileri zorunlu tutuyor. Yalnızca İyzico’ya iletilir, Kaktüs’te
+        saklanmaz. 18 yaşından küçüksen bu adımı velin kendi bilgileriyle tamamlamalı.
+      </p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {BUYER_FIELDS.map((field) => (
+          <label key={field.key} className={field.wide ? 'block sm:col-span-2' : 'block'}>
+            <span className="text-sm font-medium">{field.label}</span>
+            <input
+              type="text"
+              value={values[field.key]}
+              onChange={(event) =>
+                setValues((current) => ({ ...current, [field.key]: event.target.value }))
+              }
+              placeholder={field.placeholder}
+              inputMode={field.inputMode}
+              autoComplete={field.autoComplete}
+              maxLength={field.maxLength}
+              aria-invalid={Boolean(errors[field.key])}
+              className="mt-1 w-full rounded-xl border border-stone bg-limestone px-4 py-2.5 text-sm outline-none focus:border-cactus aria-[invalid=true]:border-bloom"
+            />
+            {errors[field.key] && (
+              <span role="alert" className="mt-1 block text-xs text-bloom">
+                {errors[field.key]}
+              </span>
+            )}
+          </label>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        disabled={pending}
+        onClick={submit}
+        className="mt-4 rounded-full bg-cactus px-5 py-2.5 text-sm font-medium text-paper hover:bg-cactus-deep disabled:bg-stone"
+      >
+        {pending ? 'İşleniyor' : `${formatTry(amountMinor)} öde`}
+      </button>
+    </div>
   );
 }
 
