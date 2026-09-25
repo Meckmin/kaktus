@@ -6,7 +6,11 @@ import type { ConversationView, MilestoneEntry, TimelineEntry } from '@/server/q
 import { OFFER_STATUS_TR } from '@/lib/offers/state-machine';
 import { formatTry } from '@/lib/onboarding/client-state';
 import { computeBreakdown } from '@/lib/offers/draft';
-import { buyerDetailsSchema, type BuyerDetailsInput } from '@/lib/payments/buyer';
+import {
+  checkoutDetailsSchema,
+  type BuyerDetailsInput,
+  type CheckoutDetailsInput,
+} from '@/lib/payments/buyer';
 import {
   acceptOffer,
   counterOffer,
@@ -211,7 +215,7 @@ function OfferBlock({
   onAccept: () => void;
   onDecline: () => void;
   onCounter: (priceMinor: number, note?: string) => void;
-  onPay: (buyer: BuyerDetailsInput) => void;
+  onPay: (buyer: CheckoutDetailsInput) => void;
 }) {
   const [countering, setCountering] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -388,8 +392,9 @@ function BuyerForm({
 }: {
   amountMinor: number;
   pending: boolean;
-  onSubmit: (buyer: BuyerDetailsInput) => void;
+  onSubmit: (buyer: CheckoutDetailsInput) => void;
 }) {
+  const [accepted, setAccepted] = useState(false);
   const [values, setValues] = useState<BuyerDetailsInput>({
     name: '',
     surname: '',
@@ -398,10 +403,11 @@ function BuyerForm({
     city: '',
     address: '',
   });
-  const [errors, setErrors] = useState<Partial<Record<keyof BuyerDetailsInput, string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof CheckoutDetailsInput, string>>>({});
 
   const submit = () => {
-    const parsed = buyerDetailsSchema.safeParse(values);
+    const details = { ...values, acceptedContract: accepted } as CheckoutDetailsInput;
+    const parsed = checkoutDetailsSchema.safeParse(details);
     if (!parsed.success) {
       const flat = parsed.error.flatten().fieldErrors;
       setErrors(
@@ -410,7 +416,7 @@ function BuyerForm({
       return;
     }
     setErrors({});
-    onSubmit(values);
+    onSubmit(details);
   };
 
   return (
@@ -446,6 +452,30 @@ function BuyerForm({
           </label>
         ))}
       </div>
+
+      <label className="mt-4 flex items-start gap-3 text-sm leading-relaxed">
+        <input
+          type="checkbox"
+          checked={accepted}
+          onChange={(event) => setAccepted(event.target.checked)}
+          className="mt-1 size-4 shrink-0 accent-cactus"
+        />
+        <span>
+          <a href="/yasal/mesafeli-hizmet-sozlesmesi" target="_blank" className="underline hover:text-cactus">
+            Ön Bilgilendirme Formu ve Mesafeli Hizmet Sözleşmesi
+          </a>
+          ’ni ve{' '}
+          <a href="/yasal/iade-ve-itiraz" target="_blank" className="underline hover:text-cactus">
+            İade ve İtiraz Koşulları
+          </a>
+          ’nı okudum, onaylıyorum.
+        </span>
+      </label>
+      {errors.acceptedContract && (
+        <span role="alert" className="mt-1 block text-xs text-bloom">
+          {errors.acceptedContract}
+        </span>
+      )}
 
       <button
         type="button"

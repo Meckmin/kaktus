@@ -18,6 +18,7 @@ import {
   getPrivateStorage,
   validateDocument,
 } from '@/lib/storage/private-storage';
+import { recordConsent } from '@/server/services/consent-service';
 
 /**
  * Coach application.
@@ -309,6 +310,11 @@ export async function submitCoachApplication(
           phone: data.phone,
         },
       });
+
+      await recordConsent(
+        { userId: session.user.id!, document: 'araci-hizmet-sozlesmesi', context: `coach:${coach.id}` },
+        tx,
+      );
 
       await tx.user.update({
         where: { id: session.user.id! },

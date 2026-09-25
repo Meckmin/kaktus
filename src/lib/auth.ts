@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db';
 import { env } from '@/lib/env';
 import { ONBOARDING_COOKIE, claimOnboardingSession } from '@/lib/onboarding/session';
 import { deliveryMode, sendVerificationRequest } from '@/lib/magic-link';
+import { recordConsent } from '@/server/services/consent-service';
 
 declare module 'next-auth' {
   interface Session {
@@ -79,6 +80,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   events: {
+    /**
+     * Account creation is where the terms are accepted — the sign-in forms say
+     * so next to the button — so the acceptance is recorded here, once.
+     */
+    async createUser({ user }) {
+      if (!user.id) return;
+      try {
+        await recordConsent({ userId: user.id, document: 'kullanim-kosullari', context: 'signup' });
+      } catch (error) {
+        console.error('terms consent record failed', error);
+      }
+    },
     /**
      * The moment that makes the guest funnel work: the questionnaire answers
      * captured before signup become a real StudentProfile here, so the student

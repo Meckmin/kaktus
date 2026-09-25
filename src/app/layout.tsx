@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Bricolage_Grotesque, Instrument_Sans } from 'next/font/google';
 import './globals.css';
+import { SiteFooter } from '@/components/legal/SiteFooter';
 
 // Both families carry the full Turkish set (ş ğ ı İ ç ö ü). `latin-ext` is not
 // optional here — without it, half the interface renders in a fallback face.
@@ -30,7 +31,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr" className={`${display.variable} ${body.variable}`}>
-      <body className="min-h-dvh">{children}</body>
+      <body className="min-h-dvh">
+        {children}
+        <SiteFooter />
+      </body>
     </html>
   );
 }

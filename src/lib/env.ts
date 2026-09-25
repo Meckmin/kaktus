@@ -22,6 +22,9 @@ import { z } from 'zod';
  */
 
 const isProd = process.env.NODE_ENV === 'production';
+// `next build` runs with NODE_ENV=production but has no business needing live
+// company details or a Redis URL; those are checked when the server starts.
+const isProdRuntime = isProd && process.env.NEXT_PHASE !== 'phase-production-build';
 
 /** A base64 string that decodes to exactly 32 bytes — an AES-256 key. */
 const base64Key32 = z
@@ -91,6 +94,29 @@ const schema = z
     // POST /api/cron/jobs. Unset in dev, the route runs unauthenticated so it
     // stays trivial to trigger by hand while iterating.
     CRON_SECRET: z.string().min(1).optional(),
+
+    // ── Shared rate limiting (Upstash Redis REST) ─────────────────────────
+    // Serverless instances don't share memory, so the in-memory limiter is a
+    // dev fallback only. Required in production.
+    UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+    UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
+
+    // ── Legal identity (shown in the footer and legal texts) ──────────────
+    // Turkish e-commerce law (6563) requires the service provider's title,
+    // address, contact and tax details to be visible on the site. Kept in env
+    // so they can be filled in once the company exists, without a code change.
+    COMPANY_TITLE: z.string().min(1).optional(),
+    COMPANY_ADDRESS: z.string().min(1).optional(),
+    COMPANY_TAX_OFFICE: z.string().min(1).optional(),
+    COMPANY_TAX_NUMBER: z.string().min(1).optional(),
+    COMPANY_MERSIS: z.string().min(1).optional(),
+    COMPANY_EMAIL: z.string().email().optional(),
+    COMPANY_PHONE: z.string().min(1).optional(),
+    COMPANY_KEP: z.string().min(1).optional(),
+    ETBIS_URL: z.string().url().optional(),
+    // '1' once a lawyer has approved src/content/legal. Until then every legal
+    // page carries a visible draft notice; scripts/launch-check.mjs flags it.
+    LEGAL_TEXTS_APPROVED: z.string().optional(),
   })
   .superRefine((val, ctx) => {
     const need = (key: keyof typeof val, why: string) =>
@@ -117,6 +143,27 @@ const schema = z
     }
     if (isProd && val.SUPABASE_URL && !val.SUPABASE_SERVICE_ROLE_KEY) {
       need('SUPABASE_SERVICE_ROLE_KEY', 'required when SUPABASE_URL is set');
+    }
+
+    if (isProdRuntime) {
+      if (!val.APP_URL.startsWith('https://')) {
+        need('APP_URL', 'must be the public https:// address in production');
+      }
+      // Verification documents: the local-disk driver refuses to run in
+      // production, so a missing bucket would only surface on first upload.
+      if (!val.SUPABASE_URL) need('SUPABASE_URL', 'required in production for document storage');
+      if (!val.UPSTASH_REDIS_REST_URL || !val.UPSTASH_REDIS_REST_TOKEN) {
+        need('UPSTASH_REDIS_REST_URL', 'required in production (with _TOKEN) for shared rate limiting');
+      }
+      for (const key of [
+        'COMPANY_TITLE',
+        'COMPANY_ADDRESS',
+        'COMPANY_TAX_OFFICE',
+        'COMPANY_TAX_NUMBER',
+        'COMPANY_EMAIL',
+      ] as const) {
+        if (!val[key]) need(key, 'required in production — shown in the footer and legal texts (6563)');
+      }
     }
   });
 

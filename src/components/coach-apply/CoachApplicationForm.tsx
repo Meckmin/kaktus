@@ -957,6 +957,13 @@ function PayoutStep({
           selected={accepted}
           onSelect={() => setAccepted(!accepted)}
         />
+        <a
+          href="/yasal/araci-hizmet-sozlesmesi"
+          target="_blank"
+          className="mt-2 inline-block text-sm text-cactus underline hover:text-cactus-deep"
+        >
+          Aracı hizmet sözleşmesini oku
+        </a>
         <FieldError errors={errors} field="acceptedTerms" />
       </div>
     </>

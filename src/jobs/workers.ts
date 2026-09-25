@@ -215,6 +215,19 @@ function isoWeek(date: Date): string {
  * Provider approval runs after the milestone worker, because it acts on
  * milestones that worker just released.
  */
+/**
+ * Deletes guest questionnaire answers past their 30-day expiry.
+ *
+ * The privacy notice promises this, and nothing else removes them: a claimed
+ * session's answers already live on the StudentProfile, and an unclaimed one
+ * belongs to someone who never signed up. MatchRun rows keep their scores and
+ * lose only the link (onDelete: SetNull).
+ */
+export async function purgeExpiredOnboardingSessions(now = new Date()): Promise<number> {
+  const { count } = await prisma.onboardingSession.deleteMany({ where: { expiresAt: { lte: now } } });
+  return count;
+}
+
 export async function runFrequentJobs(now = new Date()) {
   const reconciled = await reconcileStaleCheckouts(now);
   const offers = await expireOffers(now);
@@ -223,7 +236,8 @@ export async function runFrequentJobs(now = new Date()) {
   const milestones = await runMilestoneWorker(now);
   const approvals = await approveReleasedMilestones(now);
   const refunds = await submitPendingRefunds(now);
-  return { reconciled, offers, holdsExpired: holds, started, milestones, approvals, refunds };
+  const onboardingPurged = await purgeExpiredOnboardingSessions(now);
+  return { reconciled, offers, holdsExpired: holds, started, milestones, approvals, refunds, onboardingPurged };
 }
 
 export { runMilestoneWorker, approveReleasedMilestones, reconcileStaleCheckouts, submitPendingRefunds };

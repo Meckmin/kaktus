@@ -14,7 +14,8 @@ import { SlotUnavailableError } from '@/lib/booking/holds';
 import { createOffer } from '@/server/services/offer-service';
 import { checkRateLimit, RateLimitError } from '@/lib/rate-limit';
 import { belowFloorMessage, minOfferMinor, packageTypeForCadence } from '@/lib/offers/price-floor';
-import { buyerDetailsSchema, type BuyerDetailsInput } from '@/lib/payments/buyer';
+import { checkoutDetailsSchema, type CheckoutDetailsInput } from '@/lib/payments/buyer';
+import { recordConsent } from '@/server/services/consent-service';
 
 /**
  * Negotiation actions.
@@ -360,9 +361,9 @@ export type CheckoutResult =
  */
 export async function payForOffer(
   offerId: string,
-  buyerInput: BuyerDetailsInput,
+  buyerInput: CheckoutDetailsInput,
 ): Promise<CheckoutResult> {
-  const buyer = buyerDetailsSchema.safeParse(buyerInput);
+  const buyer = checkoutDetailsSchema.safeParse(buyerInput);
   if (!buyer.success) {
     return {
       ok: false,
@@ -393,6 +394,16 @@ export async function payForOffer(
   // Iyzico's fraud checks use the buyer's IP; the first x-forwarded-for hop is
   // the client behind our proxy. Localhost only when there is no proxy at all.
   const forwarded = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim();
+  const { acceptedContract: _accepted, ...payer } = buyer.data;
+
+  // Before checkout opens: the contract has to be accepted before payment,
+  // and this row is the evidence of which version was on screen.
+  await recordConsent({
+    userId,
+    document: 'mesafeli-hizmet-sozlesmesi',
+    context: `offer:${offerId}`,
+    ip: forwarded,
+  });
 
   try {
     const session = await startCheckout({
@@ -400,7 +411,7 @@ export async function payForOffer(
       studentUserId: userId,
       // Passed through to the provider only — not persisted anywhere.
       buyer: {
-        ...buyer.data,
+        ...payer,
         email: offer.student.user.email ?? 'ogrenci@kaktuskocluk.com',
         ip: forwarded || '127.0.0.1',
       },

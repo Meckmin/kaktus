@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
+import { TermsNotice } from '@/components/legal/TermsNotice';
 
 /**
  * The sign-in controls, extracted so both the modal and the standalone page
@@ -67,6 +68,7 @@ export function SignInPanel({ callbackUrl }: { callbackUrl: string }) {
       >
         {sending ? 'Gönderiliyor' : 'Giriş bağlantısı gönder'}
       </button>
+      <TermsNotice />
     </div>
   );
 }

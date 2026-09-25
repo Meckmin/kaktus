@@ -213,8 +213,29 @@ model User {
   auditLogs          AuditLog[]          @relation("AuditActor")
   offerEvents        OfferEvent[]
   disputesOpened     Dispute[]           @relation("DisputeOpener")
+  legalConsents      LegalConsent[]
 
   @@index([createdAt])
+}
+
+/// Evidence that a user accepted a specific version of a legal text — the
+/// terms at sign-up, the distance contract at checkout, the intermediary
+/// agreement on a coach application. Append-only: a new acceptance is a new row.
+model LegalConsent {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Slug of the document in src/content/legal (e.g. "mesafeli-hizmet-sozlesmesi").
+  document String
+  /// LEGAL_VERSION at the time of acceptance.
+  version  String
+  /// What the acceptance was attached to, e.g. an offer id at checkout.
+  context  String?
+  /// SHA-256 prefix of the client IP, never the raw address.
+  ipHash   String?
+  acceptedAt DateTime @default(now())
+
+  @@index([userId, document])
 }
 
 model Account {

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { signIn } from 'next-auth/react';
+import { TermsNotice } from '@/components/legal/TermsNotice';
 
 /**
  * The auth gate.
@@ -195,6 +196,7 @@ function AuthGateModal({ intent, onClose }: { intent: GateIntent; onClose: () =>
               >
                 {sending ? 'Gönderiliyor' : 'Giriş bağlantısı gönder'}
               </button>
+              <TermsNotice />
             </div>
           </>
         )}

@@ -334,6 +334,7 @@ describe('payForOffer', () => {
     gsmNumber: '0555 111 22 33',
     city: 'İstanbul',
     address: 'Test Mah. Deneme Sok. No:1 Kadıköy',
+    acceptedContract: true as const,
   };
 
   it('opens checkout for the student on an accepted offer', async () => {
@@ -384,6 +385,36 @@ describe('payForOffer', () => {
     expect(result.fieldErrors?.identityNumber).toBeDefined();
     expect(result.fieldErrors?.gsmNumber).toBeDefined();
     expect(await prisma.payment.count({ where: { offerId: offer.id } })).toBe(0);
+  });
+
+  it('refuses to open checkout until the distance contract is accepted', async () => {
+    const { coachUser, studentUser, offer } = await openOffer();
+    asUser(coachUser.id);
+    await acceptOffer(offer.id);
+    asUser(studentUser.id);
+
+    const result = await payForOffer(offer.id, { ...BUYER, acceptedContract: false as unknown as true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.fieldErrors?.acceptedContract).toBeDefined();
+    expect(await prisma.payment.count({ where: { offerId: offer.id } })).toBe(0);
+  });
+
+  it('records which contract version the payer accepted, for this offer', async () => {
+    const { coachUser, studentUser, offer } = await openOffer();
+    asUser(coachUser.id);
+    await acceptOffer(offer.id);
+    asUser(studentUser.id);
+
+    await payForOffer(offer.id, BUYER);
+
+    const consent = await prisma.legalConsent.findFirstOrThrow({
+      where: { userId: studentUser.id, document: 'mesafeli-hizmet-sozlesmesi' },
+    });
+    expect(consent.context).toBe(`offer:${offer.id}`);
+    expect(consent.version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(consent.ipHash).toHaveLength(32);
   });
 
   it('does not store the payer\'s identity anywhere on the payment', async () => {
@@ -922,6 +953,18 @@ describe('submitCoachApplication', () => {
     expect(after.name).toBe('Elif Ş.');
     expect(after.coachProfile?.slug).toMatch(/^elif-s/);
     expect(after.coachProfile?.slug).not.toContain('gizli');
+  });
+
+  it('records acceptance of the intermediary agreement with the application', async () => {
+    const { user } = await makeStudent();
+    asUser(user.id);
+
+    await submitCoachApplication(application);
+
+    const consent = await prisma.legalConsent.findFirst({
+      where: { userId: user.id, document: 'araci-hizmet-sozlesmesi' },
+    });
+    expect(consent).not.toBeNull();
   });
 
   it('requires a display name', async () => {

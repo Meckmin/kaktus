@@ -36,5 +36,17 @@ export const buyerDetailsSchema = z.object({
   address: z.string().trim().min(10, 'Açık adresini yaz').max(300),
 });
 
+/**
+ * Checkout = payer details + acceptance of the distance contract. The
+ * acceptance is not a buyer field and is stripped before anything reaches
+ * the provider.
+ */
+export const checkoutDetailsSchema = buyerDetailsSchema.extend({
+  acceptedContract: z.literal(true, {
+    errorMap: () => ({ message: 'Devam etmek için sözleşmeyi onaylaman gerekiyor' }),
+  }),
+});
+
 export type BuyerDetailsInput = z.input<typeof buyerDetailsSchema>;
+export type CheckoutDetailsInput = z.input<typeof checkoutDetailsSchema>;
 export type BuyerDetails = z.output<typeof buyerDetailsSchema>;
