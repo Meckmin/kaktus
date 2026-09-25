@@ -81,6 +81,8 @@ const { sendMeetingInvite, answerMeetingInvite, withdrawMeetingInvite, setExtern
 const { expireInvites } = await import('@/server/services/meeting-invite-service');
 const { closeMilestones } = await import('@/jobs/milestones');
 const { dateToIstanbulLocal } = await import('@/lib/meetings/rules');
+const { addStudyTask, editStudyTask, removeStudyTask, markStudyTask, loadPlannerWeek, copyPlannerWeek } =
+  await import('@/server/actions/planner');
 const { submitReviewAction } = await import('@/server/actions/reviews');
 
 beforeEach(async () => {
@@ -1180,5 +1182,109 @@ describe('meeting invites', () => {
     await closeMilestones(new Date());
 
     expect((await prisma.milestone.findUniqueOrThrow({ where: { id: milestone.id } })).status).toBe('IN_PROGRESS');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// planner.ts — weekly study plan
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('weekly planner', () => {
+  const MONDAY = '2026-10-05';
+  const task = (overrides: Record<string, unknown> = {}) => ({
+    day: '2026-10-06',
+    examPart: 'AYT' as const,
+    subject: 'Matematik',
+    topic: 'Türev',
+    kind: 'SORU_BANKASI' as const,
+    quantity: 60,
+    unit: 'SORU' as const,
+    ...overrides,
+  });
+
+  it('is closed to a pair that has never had a paid program', async () => {
+    const { coachUser, conversation } = await openOffer();
+    asUser(coachUser.id);
+    const result = await addStudyTask(conversation.id, task());
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.message).toContain('ödemesi yapılmış');
+  });
+
+  it('is invisible to anyone outside the pair', async () => {
+    const { conversation } = await fundedEngagement();
+    const { user: stranger } = await makeStudent();
+    asUser(stranger.id);
+    const result = await loadPlannerWeek(conversation.id, MONDAY);
+    expect(result).toEqual({ ok: false, message: 'Program bulunamadı.' });
+  });
+
+  it('lets the coach add tasks and the student see and tick them off', async () => {
+    const { coachUser, studentUser, conversation } = await fundedEngagement();
+    asUser(coachUser.id);
+    const added = await addStudyTask(conversation.id, task());
+    expect(added.ok).toBe(true);
+
+    asUser(studentUser.id);
+    const week = await loadPlannerWeek(conversation.id, '2026-10-08'); // any day of that week
+    if (!week.ok) throw new Error(week.message);
+    expect(week.data).toHaveLength(1);
+    expect(week.data[0]).toMatchObject({ day: '2026-10-06', subject: 'Matematik', done: false, editable: false });
+
+    const ticked = await markStudyTask(conversation.id, week.data[0].id, true);
+    if (!ticked.ok) throw new Error(ticked.message);
+    expect(ticked.data.done).toBe(true);
+  });
+
+  it("keeps the coach's tasks out of the student's hands, but lets the student manage their own", async () => {
+    const { coachUser, studentUser, conversation } = await fundedEngagement();
+    asUser(coachUser.id);
+    const coachTask = await addStudyTask(conversation.id, task());
+    if (!coachTask.ok) throw new Error(coachTask.message);
+
+    asUser(studentUser.id);
+    expect((await editStudyTask(conversation.id, coachTask.data.id, task({ quantity: 10 }))).ok).toBe(false);
+    expect((await removeStudyTask(conversation.id, coachTask.data.id)).ok).toBe(false);
+
+    const own = await addStudyTask(conversation.id, task({ kind: 'TEKRAR', description: 'Limit tekrarı' }));
+    if (!own.ok) throw new Error(own.message);
+    expect(own.data.editable).toBe(true);
+    expect((await editStudyTask(conversation.id, own.data.id, task({ kind: 'TEKRAR', quantity: 30, unit: 'DAKIKA' }))).ok).toBe(true);
+    expect((await removeStudyTask(conversation.id, own.data.id)).ok).toBe(true);
+
+    // The coach can edit anything on the plan.
+    asUser(coachUser.id);
+    expect((await editStudyTask(conversation.id, coachTask.data.id, task({ quantity: 80 }))).ok).toBe(true);
+  });
+
+  it('rejects a task with nothing in it', async () => {
+    const { coachUser, conversation } = await fundedEngagement();
+    asUser(coachUser.id);
+    const result = await addStudyTask(conversation.id, { day: '2026-10-06', kind: 'DIGER' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.fieldErrors?.description).toBeDefined();
+  });
+
+  it('copies a week forward, unticked, for the coach only', async () => {
+    const { coachUser, studentUser, conversation } = await fundedEngagement();
+    asUser(coachUser.id);
+    const first = await addStudyTask(conversation.id, task());
+    await addStudyTask(conversation.id, task({ day: '2026-10-09', subject: 'Fizik', topic: null }));
+    if (!first.ok) throw new Error(first.message);
+    await markStudyTask(conversation.id, first.data.id, true);
+
+    asUser(studentUser.id);
+    expect((await copyPlannerWeek(conversation.id, MONDAY)).ok).toBe(false);
+
+    asUser(coachUser.id);
+    const copied = await copyPlannerWeek(conversation.id, MONDAY);
+    expect(copied).toEqual({ ok: true, data: 2 });
+    const next = await loadPlannerWeek(conversation.id, '2026-10-12');
+    if (!next.ok) throw new Error(next.message);
+    expect(next.data.map((t) => [t.day, t.done])).toEqual([
+      ['2026-10-13', false],
+      ['2026-10-16', false],
+    ]);
   });
 });
