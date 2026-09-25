@@ -30,7 +30,7 @@ export interface HoldRequest {
   ttlMinutes: number;
 }
 
-function isExclusionViolation(error: unknown): boolean {
+export function isExclusionViolation(error: unknown): boolean {
   const e = error as { code?: string; message?: string; meta?: { code?: string } };
   return (
     e?.code === PG_EXCLUSION_VIOLATION ||

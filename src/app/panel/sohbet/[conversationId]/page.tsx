@@ -3,6 +3,8 @@ import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { getConversation } from '@/server/queries/conversation';
 import { ConversationView } from '@/components/chat/ConversationView';
+import { getMeetings } from '@/server/queries/meetings';
+import { MeetingsPanel } from '@/components/meetings/MeetingsPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +19,10 @@ export default async function ConversationPage({
 
   // Returns null for a stranger as well as for a missing row, and both render
   // as 404. Distinguishing them would confirm that a given conversation exists.
-  const conversation = await getConversation(conversationId);
+  const [conversation, meetings] = await Promise.all([
+    getConversation(conversationId),
+    getMeetings(conversationId),
+  ]);
   if (!conversation) notFound();
 
   return (
@@ -49,6 +54,7 @@ export default async function ConversationPage({
       )}
 
       <div className="mt-6">
+        {meetings && <MeetingsPanel meetings={meetings} conversationId={conversationId} />}
         <ConversationView conversation={conversation} />
       </div>
     </main>

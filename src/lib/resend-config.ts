@@ -57,6 +57,11 @@ export type DeliveryMode = 'resend' | 'local';
  * test the real template.
  */
 export function deliveryMode(): DeliveryMode {
+  // Tests never send real mail, whatever keys the developer's .env holds —
+  // not even with AUTH_FORCE_EMAIL. The integration suite creates dozens of
+  // fake users per run; with a real key it was calling Resend for each one.
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) return 'local';
+
   const key = readResendKey();
   if (!isUsableResendKey(key)) return 'local';
   if (process.env.NODE_ENV === 'development' && process.env.AUTH_FORCE_EMAIL !== '1') {

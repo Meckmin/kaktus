@@ -10,6 +10,7 @@ import {
 import { transitionOffer } from '@/server/services/offer-service';
 import { expireStaleHolds } from '@/lib/booking/holds';
 import { runMilestoneWorker } from './milestones';
+import { expireInvites } from '@/server/services/meeting-invite-service';
 import type { JobResult } from './milestones';
 
 /**
@@ -237,7 +238,18 @@ export async function runFrequentJobs(now = new Date()) {
   const approvals = await approveReleasedMilestones(now);
   const refunds = await submitPendingRefunds(now);
   const onboardingPurged = await purgeExpiredOnboardingSessions(now);
-  return { reconciled, offers, holdsExpired: holds, started, milestones, approvals, refunds, onboardingPurged };
+  const invitesExpired = await expireInvites(now);
+  return {
+    reconciled,
+    offers,
+    holdsExpired: holds,
+    started,
+    milestones,
+    approvals,
+    refunds,
+    onboardingPurged,
+    invitesExpired,
+  };
 }
 
 export { runMilestoneWorker, approveReleasedMilestones, reconcileStaleCheckouts, submitPendingRefunds };

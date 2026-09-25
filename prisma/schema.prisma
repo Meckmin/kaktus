@@ -222,17 +222,17 @@ model User {
 /// terms at sign-up, the distance contract at checkout, the intermediary
 /// agreement on a coach application. Append-only: a new acceptance is a new row.
 model LegalConsent {
-  id       String @id @default(cuid())
-  userId   String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Slug of the document in src/content/legal (e.g. "mesafeli-hizmet-sozlesmesi").
-  document String
+  document   String
   /// LEGAL_VERSION at the time of acceptance.
-  version  String
+  version    String
   /// What the acceptance was attached to, e.g. an offer id at checkout.
-  context  String?
+  context    String?
   /// SHA-256 prefix of the client IP, never the raw address.
-  ipHash   String?
+  ipHash     String?
   acceptedAt DateTime @default(now())
 
   @@index([userId, document])
@@ -617,7 +617,10 @@ model Booking {
   endsAt   DateTime      @db.Timestamptz(3)
   status   BookingStatus @default(SCHEDULED)
 
+  /// External meeting link the coach can set as a fallback (Zoom/Meet/Teams).
   meetingUrl         String?
+  /// Daily room backing the in-app video call, created lazily on first join.
+  videoRoomName      String?
   coachConfirmedAt   DateTime?
   studentConfirmedAt DateTime?
   cancelledByRole    ActorRole?
@@ -627,9 +630,97 @@ model Booking {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  invites MeetingInvite[]
+
   @@index([coachProfileId, startsAt])
   @@index([studentProfileId, startsAt])
   @@index([engagementId])
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  EXPIRED
+}
+
+/// A coach proposing a meeting time: either moving an existing session
+/// (bookingId set) or adding an extra, unbilled one (bookingId null). The
+/// student accepts or declines; accepting updates or creates the Booking, so
+/// the booking_no_overlap constraint still guards against double-booking.
+model MeetingInvite {
+  id           String     @id @default(cuid())
+  engagementId String
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  bookingId    String?
+  booking      Booking?   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  startsAt DateTime     @db.Timestamptz(3)
+  endsAt   DateTime     @db.Timestamptz(3)
+  message  String?      @db.Text
+  status   InviteStatus @default(PENDING)
+
+  createdById String
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([engagementId, status])
+  @@index([bookingId])
+}
+
+enum ExamPart {
+  TYT
+  AYT
+  YDT
+}
+
+enum StudyTaskKind {
+  KONU_ANLATIMI
+  SORU_BANKASI
+  BRANS_DENEMESI
+  GENEL_DENEME
+  TEKRAR
+  DIGER
+}
+
+enum StudyTaskUnit {
+  SORU
+  TEST
+  DAKIKA
+  SAYFA
+  VIDEO
+}
+
+/// One item in the weekly study plan coach and student build together.
+/// Attached to the coach–student pair (Conversation), not a single engagement,
+/// so the plan carries on when the student renews for another month.
+model StudyTask {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  /// Calendar day in Europe/Istanbul — a date, not an instant.
+  day      DateTime @db.Date
+  position Int      @default(0)
+
+  examPart    ExamPart?
+  subject     String?
+  topic       String?
+  kind        StudyTaskKind
+  /// Free-text resource ("3D TYT Matematik Soru Bankası") until the catalog exists.
+  resource    String?
+  description String?        @db.Text
+  quantity    Int?
+  unit        StudyTaskUnit?
+
+  completedAt DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([conversationId, day])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -651,8 +742,9 @@ model Conversation {
   flaggedAt     DateTime?
   createdAt     DateTime  @default(now())
 
-  messages Message[]
-  offers   Offer[]
+  messages   Message[]
+  offers     Offer[]
+  studyTasks StudyTask[]
 
   @@unique([coachProfileId, studentProfileId])
   @@index([lastMessageAt])
@@ -800,6 +892,7 @@ model Engagement {
 
   milestones    Milestone[]
   bookings      Booking[]
+  invites       MeetingInvite[]
   disputes      Dispute[]
   ledgerEntries LedgerEntry[]
   refunds       Refund[]
@@ -971,11 +1064,11 @@ model Review {
   studentProfileId String
   student          StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
 
-  rating          Int // 1..5, checked in SQL
-  body            String? @db.Text
-  published       Boolean @default(true)
+  rating            Int // 1..5, checked in SQL
+  body              String? @db.Text
+  published         Boolean @default(true)
   /// Net gain reported at the end of the engagement — feeds trajectory scoring.
-  netGainReported Float?
+  netGainReported   Float?
   /// Written on a program that ended early (cancelled after at least one
   /// released lesson, or closed by a dispute). Shown as "Program yarıda kaldı".
   programIncomplete Boolean @default(false)

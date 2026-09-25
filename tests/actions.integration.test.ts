@@ -76,6 +76,11 @@ const {
 const { approveCoach, resolveDisputeAction } = await import('@/server/actions/admin');
 const { submitOffer } = await import('@/server/actions/offers');
 const { submitCoachApplication } = await import('@/server/actions/coach-application');
+const { sendMeetingInvite, answerMeetingInvite, withdrawMeetingInvite, setExternalMeetingLink } =
+  await import('@/server/actions/meetings');
+const { expireInvites } = await import('@/server/services/meeting-invite-service');
+const { closeMilestones } = await import('@/jobs/milestones');
+const { dateToIstanbulLocal } = await import('@/lib/meetings/rules');
 const { submitReviewAction } = await import('@/server/actions/reviews');
 
 beforeEach(async () => {
@@ -976,5 +981,204 @@ describe('submitCoachApplication', () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('unreachable');
     expect(result.fieldErrors?.displayName).toBeDefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// meetings.ts — invites
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('meeting invites', () => {
+  // Whole minutes, far enough out to clear the 30-minute lead time.
+  const inDays = (days: number, hour = 19) => {
+    const d = new Date(Date.now() + days * 86_400_000);
+    d.setUTCHours(hour - 3, 0, 0, 0); // hour in Istanbul
+    return d;
+  };
+
+  it('lets the coach invite an extra meeting and the student accept it', async () => {
+    const { coachUser, studentUser, engagement } = await fundedEngagement();
+    asUser(coachUser.id);
+    const sent = await sendMeetingInvite({
+      engagementId: engagement.id,
+      startsAtLocal: dateToIstanbulLocal(inDays(2)),
+      durationMinutes: 45,
+      message: 'Denemeni konuşalım',
+    });
+    expect(sent).toEqual({ ok: true });
+
+    const invite = await prisma.meetingInvite.findFirstOrThrow({ where: { engagementId: engagement.id } });
+    asUser(studentUser.id);
+    expect(await answerMeetingInvite(invite.id, true)).toEqual({ ok: true });
+
+    const booking = await prisma.booking.findFirstOrThrow({
+      where: { engagementId: engagement.id, startsAt: invite.startsAt },
+    });
+    expect(booking.milestoneId).toBeNull(); // extra meetings are unbilled
+    expect(booking.endsAt.getTime() - booking.startsAt.getTime()).toBe(45 * 60_000);
+    expect((await prisma.meetingInvite.findUniqueOrThrow({ where: { id: invite.id } })).status).toBe('ACCEPTED');
+  });
+
+  it('moves an existing session when the student accepts a new time, keeping its instalment', async () => {
+    const { coachUser, studentUser, engagement } = await fundedEngagement();
+    const booking = await prisma.booking.findFirstOrThrow({ where: { engagementId: engagement.id } });
+    await prisma.booking.update({ where: { id: booking.id }, data: { videoRoomName: 'kk-old-room' } });
+
+    asUser(coachUser.id);
+    const target = inDays(3, 20);
+    await sendMeetingInvite({
+      engagementId: engagement.id,
+      bookingId: booking.id,
+      startsAtLocal: dateToIstanbulLocal(target),
+      durationMinutes: 60,
+    });
+    const invite = await prisma.meetingInvite.findFirstOrThrow({ where: { bookingId: booking.id } });
+
+    asUser(studentUser.id);
+    await answerMeetingInvite(invite.id, true);
+
+    const moved = await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } });
+    expect(moved.startsAt.getTime()).toBe(target.getTime());
+    expect(moved.milestoneId).toBe(booking.milestoneId);
+    expect(moved.videoRoomName).toBeNull(); // the old room belonged to the old time
+  });
+
+  it('replaces an older pending proposal for the same session', async () => {
+    const { coachUser, engagement } = await fundedEngagement();
+    const booking = await prisma.booking.findFirstOrThrow({ where: { engagementId: engagement.id } });
+    asUser(coachUser.id);
+    for (const days of [2, 3]) {
+      await sendMeetingInvite({
+        engagementId: engagement.id,
+        bookingId: booking.id,
+        startsAtLocal: dateToIstanbulLocal(inDays(days)),
+        durationMinutes: 60,
+      });
+    }
+    const statuses = await prisma.meetingInvite.findMany({
+      where: { bookingId: booking.id },
+      orderBy: { createdAt: 'asc' },
+      select: { status: true },
+    });
+    expect(statuses.map((i) => i.status)).toEqual(['CANCELLED', 'PENDING']);
+  });
+
+  it('refuses an invite from the student and an answer from the coach', async () => {
+    const { coachUser, studentUser, engagement } = await fundedEngagement();
+    asUser(studentUser.id);
+    const fromStudent = await sendMeetingInvite({
+      engagementId: engagement.id,
+      startsAtLocal: dateToIstanbulLocal(inDays(2)),
+      durationMinutes: 60,
+    });
+    expect(fromStudent).toEqual({ ok: false, message: 'Görüşme davetini yalnızca koç gönderebilir.' });
+
+    asUser(coachUser.id);
+    await sendMeetingInvite({ engagementId: engagement.id, startsAtLocal: dateToIstanbulLocal(inDays(2)), durationMinutes: 60 });
+    const invite = await prisma.meetingInvite.findFirstOrThrow({ where: { engagementId: engagement.id } });
+    expect(await answerMeetingInvite(invite.id, true)).toEqual({
+      ok: false,
+      message: 'Bu daveti yalnızca öğrenci yanıtlayabilir.',
+    });
+  });
+
+  it('rejects a time too soon or with an odd duration', async () => {
+    const { coachUser, engagement } = await fundedEngagement();
+    asUser(coachUser.id);
+    const soon = await sendMeetingInvite({
+      engagementId: engagement.id,
+      startsAtLocal: dateToIstanbulLocal(new Date(Date.now() + 10 * 60_000)),
+      durationMinutes: 60,
+    });
+    expect(soon.ok).toBe(false);
+    const odd = await sendMeetingInvite({
+      engagementId: engagement.id,
+      startsAtLocal: dateToIstanbulLocal(inDays(2)),
+      durationMinutes: 75,
+    });
+    expect(odd.ok).toBe(false);
+  });
+
+  it('refuses to double-book the coach and leaves the invite answerable', async () => {
+    const { coachUser, studentUser, engagement } = await fundedEngagement();
+    const at = dateToIstanbulLocal(inDays(4));
+    asUser(coachUser.id);
+    await sendMeetingInvite({ engagementId: engagement.id, startsAtLocal: at, durationMinutes: 60 });
+    await sendMeetingInvite({ engagementId: engagement.id, startsAtLocal: at, durationMinutes: 30 });
+    const [first, second] = await prisma.meetingInvite.findMany({
+      where: { engagementId: engagement.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    asUser(studentUser.id);
+    expect(await answerMeetingInvite(first.id, true)).toEqual({ ok: true });
+    const clash = await answerMeetingInvite(second.id, true);
+    expect(clash.ok).toBe(false);
+    if (clash.ok) throw new Error('unreachable');
+    expect(clash.message).toContain('başka bir görüşmesi var');
+    expect((await prisma.meetingInvite.findUniqueOrThrow({ where: { id: second.id } })).status).toBe('PENDING');
+  });
+
+  it('lets the student decline and the coach withdraw', async () => {
+    const { coachUser, studentUser, engagement } = await fundedEngagement();
+    const bookingsBefore = await prisma.booking.count({ where: { engagementId: engagement.id } });
+    asUser(coachUser.id);
+    await sendMeetingInvite({ engagementId: engagement.id, startsAtLocal: dateToIstanbulLocal(inDays(2)), durationMinutes: 60 });
+    await sendMeetingInvite({ engagementId: engagement.id, startsAtLocal: dateToIstanbulLocal(inDays(5)), durationMinutes: 60 });
+    const [a, b] = await prisma.meetingInvite.findMany({ where: { engagementId: engagement.id }, orderBy: { startsAt: 'asc' } });
+
+    asUser(studentUser.id);
+    await answerMeetingInvite(a.id, false);
+    asUser(coachUser.id);
+    await withdrawMeetingInvite(b.id);
+
+    const statuses = await prisma.meetingInvite.findMany({ where: { engagementId: engagement.id }, orderBy: { startsAt: 'asc' } });
+    expect(statuses.map((i) => i.status)).toEqual(['DECLINED', 'CANCELLED']);
+    expect(await prisma.booking.count({ where: { engagementId: engagement.id } })).toBe(bookingsBefore);
+  });
+
+  it('expires invites nobody answered before their time', async () => {
+    const { coachUser, engagement } = await fundedEngagement();
+    asUser(coachUser.id);
+    await sendMeetingInvite({ engagementId: engagement.id, startsAtLocal: dateToIstanbulLocal(inDays(2)), durationMinutes: 60 });
+
+    await expireInvites(new Date(Date.now() + 3 * 86_400_000));
+
+    const invite = await prisma.meetingInvite.findFirstOrThrow({ where: { engagementId: engagement.id } });
+    expect(invite.status).toBe('EXPIRED');
+  });
+
+  it('accepts only Zoom, Meet or Teams as a fallback link, and only from the coach', async () => {
+    const { coachUser, studentUser, engagement } = await fundedEngagement();
+    const booking = await prisma.booking.findFirstOrThrow({ where: { engagementId: engagement.id } });
+
+    asUser(studentUser.id);
+    expect((await setExternalMeetingLink(booking.id, 'https://meet.google.com/abc-defg-hij')).ok).toBe(false);
+
+    asUser(coachUser.id);
+    expect((await setExternalMeetingLink(booking.id, 'https://evil.example.com/meet')).ok).toBe(false);
+    expect(await setExternalMeetingLink(booking.id, 'https://us02web.zoom.us/j/123')).toEqual({ ok: true });
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).meetingUrl).toBe(
+      'https://us02web.zoom.us/j/123',
+    );
+  });
+
+  it('does not start a milestone\'s release clock while its moved session is still ahead', async () => {
+    const { engagement } = await fundedEngagement();
+    const milestone = engagement.milestones[0];
+    // The period has ended, but its session was moved to next week.
+    await prisma.milestone.update({
+      where: { id: milestone.id },
+      data: { status: 'IN_PROGRESS', periodEnd: new Date(Date.now() - 60_000) },
+    });
+    const session = await prisma.booking.findFirstOrThrow({ where: { engagementId: engagement.id } });
+    await prisma.booking.update({
+      where: { id: session.id },
+      data: { milestoneId: milestone.id, startsAt: new Date(Date.now() + 7 * 86_400_000), endsAt: new Date(Date.now() + 7 * 86_400_000 + 3_600_000) },
+    });
+
+    await closeMilestones(new Date());
+
+    expect((await prisma.milestone.findUniqueOrThrow({ where: { id: milestone.id } })).status).toBe('IN_PROGRESS');
   });
 });

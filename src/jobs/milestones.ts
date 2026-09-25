@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { TX_OPTIONS, ConcurrentModificationError, casStatus, tryAdvisoryLock } from '@/lib/tx';
 import { postMilestoneRelease } from '@/lib/payments/escrow';
+import { milestoneCompletableAt } from '@/lib/offers/scope';
 import { transitionOffer } from '@/server/services/offer-service';
 
 /**
@@ -72,11 +73,15 @@ export async function activateMilestones(now = new Date()): Promise<JobResult> {
 export async function closeMilestones(now = new Date()): Promise<JobResult> {
   const result = emptyResult();
 
-  const ended = await prisma.milestone.findMany({
+  const candidates = await prisma.milestone.findMany({
     where: { status: 'IN_PROGRESS', periodEnd: { lte: now } },
-    select: { id: true },
+    select: { id: true, periodEnd: true, bookings: { select: { endsAt: true, status: true } } },
     take: BATCH_SIZE,
   });
+  // A session can be moved past its milestone's period by an accepted invite;
+  // the milestone must not start its auto-release clock before that session
+  // has actually happened.
+  const ended = candidates.filter((m) => milestoneCompletableAt(m.bookings, m.periodEnd) <= now);
 
   const autoReleaseAt = new Date(now.getTime() + AUTO_RELEASE_DAYS * 24 * 3600 * 1000);
 
