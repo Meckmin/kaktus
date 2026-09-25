@@ -78,3 +78,51 @@ export function checkRateLimit(key: string, limit: number, windowMs: number): vo
 export function _resetRateLimitsForTests(): void {
   buckets.clear();
 }
+
+/**
+ * The limiter server actions should call.
+ *
+ * With UPSTASH_REDIS_REST_URL/TOKEN set (required in production — see
+ * lib/env.ts), the window lives in Redis and is shared by every serverless
+ * instance, which the in-memory map above can't be. Without them (local dev,
+ * tests) it falls back to `checkRateLimit`.
+ *
+ * Fails open: if Redis is unreachable the call is allowed and the error
+ * logged. Refusing every message and offer because a rate limiter is down
+ * would turn a monitoring problem into an outage.
+ */
+export async function enforceRateLimit(key: string, limit: number, windowMs: number): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
+    checkRateLimit(key, limit, windowMs);
+    return;
+  }
+
+  let count: number;
+  let ttlMs: number;
+  try {
+    const response = await fetch(`${url.replace(/\/$/, '')}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([
+        ['INCR', `rl:${key}`],
+        // NX: only the first hit in a window sets the expiry, so the window is
+        // fixed from its first request rather than sliding on every call.
+        ['PEXPIRE', `rl:${key}`, String(windowMs), 'NX'],
+        ['PTTL', `rl:${key}`],
+      ]),
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`Upstash responded ${response.status}`);
+    const results = (await response.json()) as Array<{ result?: number; error?: string }>;
+    count = Number(results[0]?.result);
+    ttlMs = Number(results[2]?.result);
+    if (!Number.isFinite(count)) throw new Error('Upstash returned no count');
+  } catch (error) {
+    console.error('[rate-limit] shared limiter unavailable, allowing request', error);
+    return;
+  }
+
+  if (count > limit) throw new RateLimitError(ttlMs > 0 ? ttlMs : windowMs);
+}

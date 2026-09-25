@@ -12,7 +12,7 @@ import { transitionOffer } from '@/server/services/offer-service';
 import { startCheckout } from '@/server/services/payment-service';
 import { SlotUnavailableError } from '@/lib/booking/holds';
 import { createOffer } from '@/server/services/offer-service';
-import { checkRateLimit, RateLimitError } from '@/lib/rate-limit';
+import { enforceRateLimit, RateLimitError } from '@/lib/rate-limit';
 import { belowFloorMessage, minOfferMinor, packageTypeForCadence } from '@/lib/offers/price-floor';
 import { checkoutDetailsSchema, type CheckoutDetailsInput } from '@/lib/payments/buyer';
 import { recordConsent } from '@/server/services/consent-service';
@@ -99,7 +99,7 @@ export async function sendMessage(
   const { conversation, userId } = await requireParty(conversationId);
 
   try {
-    checkRateLimit(`send-message:${userId}`, 20, 60_000);
+    await enforceRateLimit(`send-message:${userId}`, 20, 60_000);
   } catch (error) {
     if (error instanceof RateLimitError) {
       return { ok: false, blocked: false, message: 'Çok hızlı mesaj gönderiyorsun. Biraz yavaşla.' };
@@ -203,7 +203,7 @@ async function runTransition(
   const { userId, role, profileId } = await requireParty(offer.conversationId);
 
   try {
-    checkRateLimit(`offer-action:${userId}`, 20, 60_000);
+    await enforceRateLimit(`offer-action:${userId}`, 20, 60_000);
   } catch (error) {
     if (error instanceof RateLimitError) {
       return { ok: false, message: 'Çok hızlı işlem yapıyorsun. Biraz yavaşla.' };
@@ -291,7 +291,7 @@ export async function counterOffer(
   const { userId, role, profileId } = await requireParty(parent.conversationId);
 
   try {
-    checkRateLimit(`offer-action:${userId}`, 20, 60_000);
+    await enforceRateLimit(`offer-action:${userId}`, 20, 60_000);
   } catch (error) {
     if (error instanceof RateLimitError) {
       return { ok: false, message: 'Çok hızlı işlem yapıyorsun. Biraz yavaşla.' };

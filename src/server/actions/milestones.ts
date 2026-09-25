@@ -12,7 +12,7 @@ import {
 import { openDispute } from '@/server/services/dispute-service';
 import { declineOffer } from '@/server/actions/negotiation';
 import { OfferTransitionError } from '@/lib/offers/state-machine';
-import { checkRateLimit, RateLimitError } from '@/lib/rate-limit';
+import { enforceRateLimit, RateLimitError } from '@/lib/rate-limit';
 
 /**
  * Milestone completion, escrow release, and the student's dispute / cancellation
@@ -103,7 +103,7 @@ export async function raiseDispute(input: OpenDisputeInput): Promise<MilestoneRe
   if (!session?.user?.id) return { ok: false, message: 'Önce giriş yapman gerekiyor.' };
 
   try {
-    checkRateLimit(`raise-dispute:${session.user.id}`, 5, 60_000);
+    await enforceRateLimit(`raise-dispute:${session.user.id}`, 5, 60_000);
   } catch (error) {
     if (error instanceof RateLimitError) {
       return { ok: false, message: 'Çok hızlı işlem yapıyorsun. Biraz yavaşla.' };

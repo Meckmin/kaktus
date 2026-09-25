@@ -169,13 +169,24 @@ const schema = z
 
 export type Env = z.infer<typeof schema>;
 
+/**
+ * `KEY=""` means "not set". .env.example ships every key empty, and dashboards
+ * like Vercel's keep empty values around; without this, an empty optional key
+ * failed its `.min(1)` / `.url()` check and the app refused to boot.
+ */
+function withoutEmptyValues(source: NodeJS.ProcessEnv): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(source).filter((entry): entry is [string, string] => Boolean(entry[1]?.trim())),
+  );
+}
+
 function load(): Env {
   if (process.env.SKIP_ENV_VALIDATION === '1') {
     // Trust the caller; still coerce defaults so the shape is stable.
-    return schema.parse({ ...process.env });
+    return schema.parse(withoutEmptyValues(process.env));
   }
 
-  const parsed = schema.safeParse(process.env);
+  const parsed = schema.safeParse(withoutEmptyValues(process.env));
   if (!parsed.success) {
     const lines = parsed.error.issues.map(
       (i) => `  • ${i.path.join('.') || '(root)'}: ${i.message}`,

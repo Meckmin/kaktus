@@ -24,7 +24,9 @@
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
     "check:actions": "node scripts/check-server-actions.mjs",
-    "verify": "npm run check:actions && npm run typecheck"
+    "verify": "npm run check:actions && npm run typecheck",
+    "launch-check": "node scripts/launch-check.mjs",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.0",

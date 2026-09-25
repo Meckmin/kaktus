@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createOffer } from '@/server/services/offer-service';
 import { SlotUnavailableError } from '@/lib/booking/holds';
-import { checkRateLimit, RateLimitError } from '@/lib/rate-limit';
+import { enforceRateLimit, RateLimitError } from '@/lib/rate-limit';
 import { claimOnboardingSessionFromCookie } from '@/lib/onboarding/session';
 import {
   OFFER_DRAFT_COOKIE,
@@ -86,7 +86,7 @@ export async function submitOffer(draft: OfferDraft): Promise<SubmitOfferResult>
   }
 
   try {
-    checkRateLimit(`submit-offer:${session.user.id}`, 10, 60_000);
+    await enforceRateLimit(`submit-offer:${session.user.id}`, 10, 60_000);
   } catch (error) {
     if (error instanceof RateLimitError) {
       return { ok: false, code: 'FAILED', message: 'Çok hızlı teklif gönderiyorsun. Biraz yavaşla.' };
