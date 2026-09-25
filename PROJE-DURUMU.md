@@ -362,6 +362,17 @@ any file on disk) becomes worth the smaller amount of protection it buys.
 
 ## 4. What to do next
 
+**The step-by-step launch plan — company, accounts, Iyzico, lawyer, ETBİS, launch
+day — now lives in `YAYIN-REHBERI.md` (Turkish).** The code side of launch is done:
+legal texts (drafts, awaiting a lawyer) and recorded consents, a footer with the
+company's legal identity, shared rate limiting, production checks that refuse to
+boot with missing settings, and `npm run launch-check`. The automatic payout queue
+mentioned above turned out to be unnecessary: under Iyzico's marketplace model Iyzico
+pays coaches itself once a lesson's instalment is approved, and that approval already
+runs every five minutes.
+
+The list below is kept for context.
+
 ### Before taking real money
 
 - Test the full payment flow against İyzico's test environment, including 3D Secure.
