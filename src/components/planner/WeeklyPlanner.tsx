@@ -201,7 +201,7 @@ export function WeeklyPlanner({
 
               <ul className="mt-2 flex-1 space-y-2">
                 {dayTasks.map((task) =>
-                  editing?.task?.id === task.id ? (
+                  live && editing?.task?.id === task.id ? (
                     <li key={task.id}>
                       <TaskForm
                         day={day}
@@ -226,7 +226,7 @@ export function WeeklyPlanner({
                 )}
               </ul>
 
-              {editing && !editing.task && editing.day === day ? (
+              {live && editing && !editing.task && editing.day === day ? (
                 <TaskForm
                   day={day}
                   pending={pending}
@@ -246,6 +246,39 @@ export function WeeklyPlanner({
           );
         })}
       </div>
+
+      {/* In the week grid a day column is too narrow for the form, so it opens
+          as a dialog; in a call (one day at a time) it stays inline. */}
+      {!live && editing && (
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-ink/40 sm:items-center sm:p-6"
+          onClick={(event) => event.target === event.currentTarget && setEditing(null)}
+        >
+          <div role="dialog" aria-modal="true" className="w-full max-w-md rounded-t-2xl bg-paper p-5 shadow-xl sm:rounded-2xl">
+            <h2 className="font-display text-lg font-semibold">
+              {editing.task ? 'Görevi düzenle' : 'Görev ekle'}
+              <span className="ml-2 text-sm font-normal text-muted">
+                {dayLabel(editing.day).weekday} {dayLabel(editing.day).date}
+              </span>
+            </h2>
+            <TaskForm
+              day={editing.day}
+              initial={editing.task}
+              pending={pending}
+              onCancel={() => setEditing(null)}
+              onSubmit={(input) =>
+                run(
+                  () =>
+                    editing.task
+                      ? editStudyTask(conversationId, editing.task.id, input)
+                      : addStudyTask(conversationId, input),
+                  () => setEditing(null),
+                )
+              }
+            />
+          </div>
+        </div>
+      )}
     </section>
   );
 }
