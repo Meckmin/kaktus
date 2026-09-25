@@ -52,6 +52,7 @@ const MILESTONE_LOAD = {
     engagement: {
       select: {
         id: true,
+        status: true,
         offerId: true,
         coachProfileId: true,
         commissionBps: true,
@@ -91,6 +92,9 @@ export async function markMilestoneCompleted(args: {
   if (!milestone) throw new MilestoneActionError('Dilim bulunamadı.', 'NOT_FOUND');
   if (milestone.engagement.coach.userId !== args.coachUserId) {
     throw new MilestoneActionError('Bu dilimi yalnızca koç tamamlandı işaretleyebilir.', 'FORBIDDEN');
+  }
+  if (milestone.engagement.status !== 'ACTIVE') {
+    throw new MilestoneActionError('Bu programın ödemesi henüz alınmadı.', 'WRONG_STATE');
   }
   if (!['SCHEDULED', 'IN_PROGRESS', 'PENDING_CONFIRMATION'].includes(milestone.status)) {
     throw new MilestoneActionError(
@@ -172,6 +176,9 @@ export async function approveMilestoneRelease(args: {
   if (!milestone) throw new MilestoneActionError('Dilim bulunamadı.', 'NOT_FOUND');
   if (milestone.engagement.student.userId !== args.studentUserId) {
     throw new MilestoneActionError('Bu onayı yalnızca öğrenci verebilir.', 'FORBIDDEN');
+  }
+  if (milestone.engagement.status !== 'ACTIVE') {
+    throw new MilestoneActionError('Bu programın ödemesi henüz alınmadı.', 'WRONG_STATE');
   }
   if (milestone.status !== 'PENDING_CONFIRMATION') {
     throw new MilestoneActionError(

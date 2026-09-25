@@ -337,7 +337,19 @@ async function applyEffect(
 
     case 'CREATE_ENGAGEMENT': {
       const existing = await tx.engagement.findUnique({ where: { offerId: offer.id } });
-      if (existing) return; // idempotent: webhook retries must not duplicate
+      if (existing) {
+        // Checkout already created it as PENDING_PAYMENT; the capture is what
+        // makes it real — and what the coach's active-student count tracks.
+        // Before this, the checkout path never incremented the counter.
+        if (existing.status === 'PENDING_PAYMENT') {
+          await tx.engagement.update({ where: { id: existing.id }, data: { status: 'ACTIVE' } });
+          await tx.coachProfile.update({
+            where: { id: offer.coachProfileId },
+            data: { activeEngagements: { increment: 1 } },
+          });
+        }
+        return; // idempotent: webhook retries must not duplicate
+      }
       await tx.engagement.create({
         data: {
           offerId: offer.id,

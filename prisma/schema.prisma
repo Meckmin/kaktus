@@ -115,6 +115,9 @@ enum MilestoneStatus {
 }
 
 enum EngagementStatus {
+  /// Created when checkout opens (its milestones become Iyzico basket lines),
+  /// but nothing is paid yet. Jobs, meetings and the planner ignore it.
+  PENDING_PAYMENT
   ACTIVE
   COMPLETED
   CANCELLED

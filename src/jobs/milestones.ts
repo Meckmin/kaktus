@@ -43,7 +43,9 @@ export async function activateMilestones(now = new Date()): Promise<JobResult> {
   const result = emptyResult();
 
   const due = await prisma.milestone.findMany({
-    where: { status: 'SCHEDULED', periodStart: { lte: now } },
+    // Only paid programs: an engagement whose checkout was opened but never
+    // paid must not start a release clock on money that isn't there.
+    where: { status: 'SCHEDULED', periodStart: { lte: now }, engagement: { status: 'ACTIVE' } },
     select: { id: true },
     take: BATCH_SIZE,
   });
@@ -74,7 +76,7 @@ export async function closeMilestones(now = new Date()): Promise<JobResult> {
   const result = emptyResult();
 
   const candidates = await prisma.milestone.findMany({
-    where: { status: 'IN_PROGRESS', periodEnd: { lte: now } },
+    where: { status: 'IN_PROGRESS', periodEnd: { lte: now }, engagement: { status: 'ACTIVE' } },
     select: { id: true, periodEnd: true, bookings: { select: { endsAt: true, status: true } } },
     take: BATCH_SIZE,
   });
@@ -121,6 +123,7 @@ export async function autoReleaseMilestones(now = new Date()): Promise<JobResult
   const candidates = await prisma.milestone.findMany({
     where: {
       status: 'PENDING_CONFIRMATION',
+      engagement: { status: 'ACTIVE' },
       OR: [
         { autoReleaseAt: { lte: now } },
         // Fast path: both parties already confirmed, no reason to make the

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/db';
 import { _resetRateLimitsForTests } from '@/lib/rate-limit';
-import { createOffer } from '@/server/services/offer-service';
+import { createOffer, transitionOffer } from '@/server/services/offer-service';
 import {
   fundedEngagement,
   makeConversation,
@@ -10,6 +10,7 @@ import {
   resetDatabase,
   scope,
   slot,
+  capturePayment,
 } from './factories';
 
 /**
@@ -79,7 +80,7 @@ const { submitCoachApplication } = await import('@/server/actions/coach-applicat
 const { sendMeetingInvite, answerMeetingInvite, withdrawMeetingInvite, setExternalMeetingLink, joinMeeting } =
   await import('@/server/actions/meetings');
 const { expireInvites } = await import('@/server/services/meeting-invite-service');
-const { closeMilestones } = await import('@/jobs/milestones');
+const { closeMilestones, runMilestoneWorker } = await import('@/jobs/milestones');
 const { dateToIstanbulLocal } = await import('@/lib/meetings/rules');
 const { addStudyTask, editStudyTask, removeStudyTask, markStudyTask, loadPlannerWeek, copyPlannerWeek } =
   await import('@/server/actions/planner');
@@ -1349,5 +1350,77 @@ describe('joinMeeting', () => {
 
     expect(tokens.map((t) => t.is_owner)).toEqual([true, false]);
     expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).videoRoomName).toBe('kk-room');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Abandoned checkout — found in a multi-student E2E run
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('an opened but unpaid checkout', () => {
+  const BUYER = {
+    name: 'Ayşe',
+    surname: 'Yılmaz',
+    identityNumber: '12345678950',
+    gsmNumber: '05551112233',
+    city: 'İstanbul',
+    address: 'Test Mah. Deneme Sok. No:1',
+    acceptedContract: true as const,
+  };
+
+  async function checkoutOpened() {
+    const built = await openOffer();
+    asUser(built.coachUser.id);
+    await acceptOffer(built.offer.id);
+    asUser(built.studentUser.id);
+    expect((await payForOffer(built.offer.id, BUYER)).ok).toBe(true);
+    const engagement = await prisma.engagement.findUniqueOrThrow({
+      where: { offerId: built.offer.id },
+      include: { milestones: true },
+    });
+    return { ...built, engagement };
+  }
+
+  it('is PENDING_PAYMENT, not counted, and opens no planner', async () => {
+    const { coach, studentUser, conversation, engagement } = await checkoutOpened();
+    expect(engagement.status).toBe('PENDING_PAYMENT');
+    expect((await prisma.coachProfile.findUniqueOrThrow({ where: { id: coach.id } })).activeEngagements).toBe(0);
+    asUser(studentUser.id);
+    expect((await loadPlannerWeek(conversation.id, '2026-10-05')).ok).toBe(false);
+  });
+
+  it('never moves money: the milestone worker leaves it alone however much time passes', async () => {
+    const { engagement } = await checkoutOpened();
+    // Its only period is long over.
+    await prisma.milestone.updateMany({
+      where: { engagementId: engagement.id },
+      data: { periodStart: new Date(Date.now() - 3 * 86_400_000), periodEnd: new Date(Date.now() - 2 * 86_400_000) },
+    });
+
+    for (const days of [1, 10, 40]) await runMilestoneWorker(new Date(Date.now() + days * 86_400_000));
+
+    const milestones = await prisma.milestone.findMany({ where: { engagementId: engagement.id } });
+    expect(milestones.every((m) => m.status === 'SCHEDULED')).toBe(true);
+    expect(await prisma.ledgerEntry.count({ where: { engagementId: engagement.id } })).toBe(0);
+  });
+
+  it('refuses the coach marking a lesson done on it', async () => {
+    const { coachUser, engagement } = await checkoutOpened();
+    await prisma.milestone.updateMany({
+      where: { engagementId: engagement.id },
+      data: { periodEnd: new Date(Date.now() - 60_000) },
+    });
+    asUser(coachUser.id);
+    const result = await completeMilestone(engagement.milestones[0].id);
+    expect(result).toEqual({ ok: false, message: 'Bu programın ödemesi henüz alınmadı.' });
+  });
+
+  it('becomes ACTIVE and counts toward the coach once the payment is captured', async () => {
+    const { coach, offer, engagement } = await checkoutOpened();
+    await capturePayment(offer.id, offer.priceMinor);
+    await transitionOffer({ offerId: offer.id, event: 'PAYMENT_CAPTURED', actor: 'SYSTEM' });
+
+    expect((await prisma.engagement.findUniqueOrThrow({ where: { id: engagement.id } })).status).toBe('ACTIVE');
+    expect((await prisma.coachProfile.findUniqueOrThrow({ where: { id: coach.id } })).activeEngagements).toBe(1);
   });
 });

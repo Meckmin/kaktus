@@ -200,7 +200,8 @@ async function ensureMilestones(offerId: string) {
           offerId,
           coachProfileId: offer.coachProfileId,
           studentProfileId: offer.studentProfileId,
-          status: 'ACTIVE',
+          // Not ACTIVE until the payment is captured (CREATE_ENGAGEMENT flips it).
+          status: 'PENDING_PAYMENT',
           startDate: offer.startDate,
           endDate: offer.endDate,
           totalMinor: offer.priceMinor,

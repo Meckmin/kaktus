@@ -48,8 +48,15 @@ export async function plannerAccess(conversationId: string, userId: string): Pro
   const isStudent = conversation.student.userId === userId;
   if (!isCoach && !isStudent) throw new PlannerError('Program bulunamadı.', 'NOT_FOUND');
 
+  // Any program that was actually paid for — including finished or cancelled
+  // ones, so the plan stays readable afterwards. A checkout that was opened but
+  // never paid (PENDING_PAYMENT) doesn't count.
   const paid = await prisma.engagement.count({
-    where: { coachProfileId: conversation.coachProfileId, studentProfileId: conversation.studentProfileId },
+    where: {
+      coachProfileId: conversation.coachProfileId,
+      studentProfileId: conversation.studentProfileId,
+      status: { not: 'PENDING_PAYMENT' },
+    },
   });
   if (paid === 0) {
     throw new PlannerError('Haftalık program, ödemesi yapılmış bir program başladığında açılır.', 'FORBIDDEN');

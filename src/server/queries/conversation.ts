@@ -225,7 +225,11 @@ export async function getConversation(conversationId: string): Promise<Conversat
   // `offers` is ordered oldest-first, so among offers with an engagement,
   // prefer the currently unsettled one (ACTIVE) over a settled one; between
   // two of the same kind, prefer the most recent.
-  const engagementOffers = conversation.offers.filter((o) => o.engagement);
+  // An engagement still PENDING_PAYMENT only exists because checkout opened;
+  // it has no milestones to show until the payment is captured.
+  const engagementOffers = conversation.offers.filter(
+    (o) => o.engagement && o.engagement.status !== 'PENDING_PAYMENT',
+  );
   const paidOffer =
     [...engagementOffers].reverse().find((o) => o.engagement?.status === 'ACTIVE') ??
     engagementOffers[engagementOffers.length - 1];
