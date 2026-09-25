@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/db';
 import { _resetRateLimitsForTests } from '@/lib/rate-limit';
 import { createOffer } from '@/server/services/offer-service';
@@ -76,7 +76,7 @@ const {
 const { approveCoach, resolveDisputeAction } = await import('@/server/actions/admin');
 const { submitOffer } = await import('@/server/actions/offers');
 const { submitCoachApplication } = await import('@/server/actions/coach-application');
-const { sendMeetingInvite, answerMeetingInvite, withdrawMeetingInvite, setExternalMeetingLink } =
+const { sendMeetingInvite, answerMeetingInvite, withdrawMeetingInvite, setExternalMeetingLink, joinMeeting } =
   await import('@/server/actions/meetings');
 const { expireInvites } = await import('@/server/services/meeting-invite-service');
 const { closeMilestones } = await import('@/jobs/milestones');
@@ -1286,5 +1286,68 @@ describe('weekly planner', () => {
       ['2026-10-13', false],
       ['2026-10-16', false],
     ]);
+  });
+});
+
+describe('joinMeeting', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    delete process.env.DAILY_API_KEY;
+  });
+
+  async function meetingStartingIn(minutes: number) {
+    const built = await fundedEngagement();
+    const booking = await prisma.booking.findFirstOrThrow({ where: { engagementId: built.engagement.id } });
+    const startsAt = new Date(Date.now() + minutes * 60_000);
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { startsAt, endsAt: new Date(startsAt.getTime() + 60 * 60_000) },
+    });
+    return { ...built, booking };
+  }
+
+  it('keeps the room closed until 10 minutes before the start', async () => {
+    const { studentUser, booking } = await meetingStartingIn(60);
+    asUser(studentUser.id);
+    const result = await joinMeeting(booking.id);
+    expect(result).toMatchObject({ ok: false, message: expect.stringContaining('10 dakika önce') });
+  });
+
+  it('turns strangers away', async () => {
+    const { booking } = await meetingStartingIn(5);
+    const { user: stranger } = await makeStudent();
+    asUser(stranger.id);
+    expect(await joinMeeting(booking.id)).toEqual({ ok: false, message: 'Görüşme bulunamadı.', fallbackUrl: null });
+  });
+
+  it("falls back to the coach's link when Daily isn't configured", async () => {
+    const { studentUser, booking } = await meetingStartingIn(5);
+    await prisma.booking.update({ where: { id: booking.id }, data: { meetingUrl: 'https://meet.google.com/abc-defg-hij' } });
+    asUser(studentUser.id);
+    const result = await joinMeeting(booking.id);
+    expect(result).toMatchObject({ ok: false, fallbackUrl: 'https://meet.google.com/abc-defg-hij' });
+  });
+
+  it('opens the Daily room with a personal token, owner rights for the coach only', async () => {
+    const { coachUser, studentUser, booking } = await meetingStartingIn(5);
+    process.env.DAILY_API_KEY = 'daily-test-key';
+    const tokens: Array<{ is_owner: boolean }> = [];
+    globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      if (String(url).endsWith('/meeting-tokens')) {
+        tokens.push(body.properties);
+        return new Response(JSON.stringify({ token: `tok_${tokens.length}` }));
+      }
+      return new Response(JSON.stringify({ name: 'kk-room', url: 'https://kaktus.daily.co/kk-room' }));
+    }) as typeof fetch;
+
+    asUser(coachUser.id);
+    expect(await joinMeeting(booking.id)).toEqual({ ok: true, url: 'https://kaktus.daily.co/kk-room?t=tok_1' });
+    asUser(studentUser.id);
+    expect(await joinMeeting(booking.id)).toEqual({ ok: true, url: 'https://kaktus.daily.co/kk-room?t=tok_2' });
+
+    expect(tokens.map((t) => t.is_owner)).toEqual([true, false]);
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).videoRoomName).toBe('kk-room');
   });
 });

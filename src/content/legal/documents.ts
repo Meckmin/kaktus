@@ -12,7 +12,7 @@ import type { CompanyInfo } from '@/lib/legal/company';
  * Bump LEGAL_VERSION whenever a text changes materially: consents are recorded
  * against a version, so a later dispute can show which text someone accepted.
  */
-export const LEGAL_VERSION = '2026-09-25';
+export const LEGAL_VERSION = '2026-09-26';
 
 export type LegalSlug =
   | 'kullanim-kosullari'
@@ -72,38 +72,45 @@ export function legalDocuments(c: CompanyInfo): LegalDocument[] {
           ],
         },
         {
-          heading: '4. Ödeme ve emanet',
+          heading: '4. Görüşmeler ve haftalık program',
+          body: [
+            'Koç ile öğrenci görüşmelerini platformdaki görüntülü görüşme odasında yapar; koç, görüşme saatini değiştirmek ya da ek görüşme yapmak için davet gönderir, öğrenci kabul eder. Görüşmeler kaydedilmez. Uygulama içi görüşme kullanılamadığında koçun eklediği Zoom, Google Meet ya da Microsoft Teams bağlantısı kullanılabilir.',
+            'Haftalık çalışma programı platformda birlikte hazırlanır; programdaki görevler ve işaretlemeler iki tarafça da görülebilir.',
+          ],
+        },
+        {
+          heading: '5. Ödeme ve emanet',
           body: [
             'Ödemeler lisanslı ödeme kuruluşu İyzico aracılığıyla alınır. Ödenen tutar koça doğrudan geçmez; İyzico nezdinde tutulur ve her ders yapıldıkça dilimler hâlinde koça aktarılır. Kart bilgileri Kaktüs Koçluk tarafından görülmez ve saklanmaz.',
             `Koç bir dersi yapıldı olarak işaretlediğinde öğrenci onaylayabilir ya da sorun bildirebilir; ${AUTO_RELEASE_DAYS} gün içinde işlem yapılmazsa ilgili dilim koça aktarılır. Koça aktarılmış dilimler geri alınmaz.`,
           ],
         },
         {
-          heading: '5. Platform dışında anlaşma yasağı',
+          heading: '6. Platform dışında anlaşma yasağı',
           body: [
             'Taraflar, platform üzerinden tanıştıkları kişiyle ödeme ya da ders düzenlemesini platform dışına taşımamayı kabul eder. Mesajlarda telefon numarası, IBAN, sosyal medya hesabı gibi iletişim bilgileri otomatik olarak gizlenir. Bu kuralın ihlali hesabın kapatılmasına yol açabilir; platform dışında yapılan ödemeler güvence kapsamında değildir.',
           ],
         },
         {
-          heading: '6. Koç doğrulaması',
+          heading: '7. Koç doğrulaması',
           body: [
             'Koçların beyan ettiği YKS sıralaması, yüklenen ÖSYM belgesiyle bir inceleme ekibi tarafından kontrol edilir. İnceleme özen gösterilerek yapılır; ancak belgelerin gerçeğe uygunluğundan belgeyi yükleyen koç sorumludur.',
           ],
         },
         {
-          heading: '7. Değerlendirmeler',
+          heading: '8. Değerlendirmeler',
           body: [
             'Öğrenciler tamamlanan ya da yarıda kalan programlar için değerlendirme yazabilir; yarıda kalan programlara ait değerlendirmeler bu şekilde etiketlenir. Değerlendirmelerde öğrencinin yalnızca baş harfleri gösterilir. Hakaret, kişisel veri ya da gerçeğe aykırı içerik yayından kaldırılabilir.',
           ],
         },
         {
-          heading: '8. Sorumluluğun sınırı',
+          heading: '9. Sorumluluğun sınırı',
           body: [
             'Kaktüs Koçluk, koçluk hizmetinin sonucunu (sınav başarısı, net artışı, yerleştirme) garanti etmez. Koçların verdiği hizmetin içeriğinden koç sorumludur. Kaktüs Koçluk’un sorumluluğu, kendi sağladığı aracılık ve ödeme hizmetleriyle sınırlıdır.',
           ],
         },
         {
-          heading: '9. Değişiklikler ve iletişim',
+          heading: '10. Değişiklikler ve iletişim',
           body: [
             'Bu koşullar güncellenebilir; önemli değişiklikler sitede duyurulur. Sorular için: ' + contact + '.',
           ],
@@ -128,6 +135,7 @@ export function legalDocuments(c: CompanyInfo): LegalDocument[] {
             'Kimlik ve iletişim: ad, soyad (girersen), e-posta adresi.',
             'Eşleştirme cevapları: alan, sınıf, hedef sıralama/üniversite/bölüm, deneme netleri, çalışma tarzı tercihleri, bütçe, müsait saatler.',
             'Platform içi yazışmalar ve teklifler; teklif ve ödeme geçmişi; değerlendirmeler.',
+            'Görüşme ve çalışma verileri: görüşme davetleri ve saatleri; haftalık programdaki görevler ve tamamlanma durumları. Görüntülü görüşme sırasında görüntü ve ses, görüşme hizmet sağlayıcısının sunucuları üzerinden karşı tarafa iletilir; görüşmeler kaydedilmez ve Kaktüs Koçluk tarafından saklanmaz.',
             'Ödeme adımında ödemeyi yapan kişinin ad, soyad, T.C. kimlik numarası, telefon ve adresi: yalnızca ödeme kuruluşu İyzico’ya iletilir, Kaktüs Koçluk tarafından saklanmaz. Kart bilgileri Kaktüs Koçluk’a hiç ulaşmaz.',
             'Koçlar için ayrıca: üniversite ve bölüm, YKS sıralaması ve ÖSYM belgesi, ödeme almak için T.C. kimlik/vergi numarası, IBAN, adres ve telefon (şifrelenerek saklanır).',
             'İşlem güvenliği: oturum bilgileri, IP adresi, tarayıcı bilgisi ve işlem kayıtları.',
@@ -144,8 +152,8 @@ export function legalDocuments(c: CompanyInfo): LegalDocument[] {
         {
           heading: '4. Aktarım',
           body: [
-            'Veriler; ödeme için İyzico Ödeme Hizmetleri A.Ş.’ye, e-posta gönderimi için e-posta hizmet sağlayıcımıza, barındırma ve veritabanı hizmeti aldığımız bulut sağlayıcılarına, talep hâlinde yetkili kamu kurumlarına aktarılabilir.',
-            'Barındırma, veritabanı ve e-posta sağlayıcılarımızın bir kısmı yurt dışında (Avrupa Birliği ve Amerika Birleşik Devletleri) bulunmaktadır. Yurt dışına aktarım, KVKK m.9’da öngörülen uygun güvenceler (standart sözleşme) çerçevesinde ya da bunun mümkün olmadığı hâllerde açık rızana dayanılarak yapılır.',
+            'Veriler; ödeme için İyzico Ödeme Hizmetleri A.Ş.’ye, e-posta gönderimi için e-posta hizmet sağlayıcımıza, görüntülü görüşme için görüşme hizmet sağlayıcımıza, barındırma ve veritabanı hizmeti aldığımız bulut sağlayıcılarına, talep hâlinde yetkili kamu kurumlarına aktarılabilir.',
+            'Barındırma, veritabanı, e-posta ve görüntülü görüşme sağlayıcılarımızın bir kısmı yurt dışında (Avrupa Birliği ve Amerika Birleşik Devletleri) bulunmaktadır. Yurt dışına aktarım, KVKK m.9’da öngörülen uygun güvenceler (standart sözleşme) çerçevesinde ya da bunun mümkün olmadığı hâllerde açık rızana dayanılarak yapılır.',
             'Koçlar, anlaştıkları öğrencinin adını (varsa) ve eşleştirme cevaplarını görebilir; öğrenciler koçun profilde yayımlanan bilgilerini görebilir. Değerlendirmelerde öğrencinin yalnızca baş harfleri yayımlanır.',
           ],
         },
@@ -173,8 +181,8 @@ export function legalDocuments(c: CompanyInfo): LegalDocument[] {
         {
           heading: 'Yurt dışına aktarım',
           body: [
-            `Aydınlatma Metni’nde açıklandığı üzere, ${who} platformun barındırma, veritabanı ve e-posta hizmetlerini yurt dışında bulunan hizmet sağlayıcılardan almaktadır. Bu aktarımlar öncelikle KVKK m.9’daki uygun güvenceler (standart sözleşme) ile yapılır.`,
-            'Standart sözleşmenin uygulanamadığı durumlarda; kimlik, iletişim, eşleştirme cevapları ve platform içi yazışma verilerimin, platform hizmetinin sunulması amacıyla Avrupa Birliği ve Amerika Birleşik Devletleri’nde bulunan hizmet sağlayıcılara aktarılmasına açık rıza veriyorum.',
+            `Aydınlatma Metni’nde açıklandığı üzere, ${who} platformun barındırma, veritabanı, e-posta ve görüntülü görüşme hizmetlerini yurt dışında bulunan hizmet sağlayıcılardan almaktadır. Bu aktarımlar öncelikle KVKK m.9’daki uygun güvenceler (standart sözleşme) ile yapılır.`,
+            'Standart sözleşmenin uygulanamadığı durumlarda; kimlik, iletişim, eşleştirme cevapları, platform içi yazışma ve görüntülü görüşme sırasında iletilen görüntü ve ses verilerimin, platform hizmetinin sunulması amacıyla Avrupa Birliği ve Amerika Birleşik Devletleri’nde bulunan hizmet sağlayıcılara aktarılmasına açık rıza veriyorum.',
             `Bu rızamı dilediğim zaman ${c.email} adresine yazarak geri alabileceğimi, geri almanın geçmişteki aktarımların hukuka uygunluğunu etkilemeyeceğini biliyorum.`,
           ],
         },
@@ -199,6 +207,7 @@ export function legalDocuments(c: CompanyInfo): LegalDocument[] {
             'Güvenlik çerezleri (authjs.csrf-token, authjs.callback-url): giriş işleminin güvenliği için; oturum boyunca.',
             'Eşleştirme cevapları (kk_onb): üye olmadan cevapladığın soruları, giriş yaptığında hesabına taşımak için; 30 gün.',
             'Teklif taslağı (kk_offer_draft): giriş ekranına geçerken hazırladığın teklifin kaybolmaması için; 6 saat.',
+            'Görüntülü görüşme odası, görüşme hizmet sağlayıcısının (Daily) sayfası olarak açılır ve görüşmenin çalışması için kendi zorunlu çerezlerini kullanabilir; bu çerezler yalnızca görüşme odasına girdiğinde yüklenir.',
             'Ayrıca koç başvuru formunun yarıda kalan adımları, tarayıcının yerel depolamasında (localStorage) tutulur; ödeme bilgileri bu kayda hiçbir zaman yazılmaz.',
           ],
         },
@@ -227,7 +236,7 @@ export function legalDocuments(c: CompanyInfo): LegalDocument[] {
         {
           heading: '2. Hizmetin konusu, bedeli ve süresi',
           body: [
-            'Hizmet; kabul edilen teklifte yazan paket (tanışma seansı ya da 4 haftalık program), seans sayısı, seans süresi ve tarihlerde verilecek YKS koçluğudur. Seanslar çevrim içi yapılır.',
+            'Hizmet; kabul edilen teklifte yazan paket (tanışma seansı ya da 4 haftalık program), seans sayısı, seans süresi ve tarihlerde verilecek YKS koçluğudur. Seanslar platformdaki görüntülü görüşme odasında çevrim içi yapılır ve kaydedilmez. Koç bir seansın saatini değiştirmeyi önerebilir; değişiklik öğrencinin onayıyla geçerli olur.',
             'Bedel, kabul edilen teklifte gösterilen tutardır ve vergiler dahildir. Bedelin içinde Kaktüs Koçluk’un aracılık hizmet bedeli (' + COMMISSION + ') yer alır; ödeme ekranında ayrıca gösterilir.',
           ],
         },
@@ -305,7 +314,7 @@ export function legalDocuments(c: CompanyInfo): LegalDocument[] {
         {
           heading: '7. Reşit olmayan öğrenciler',
           body: [
-            'Öğrencilerin önemli bir kısmı 18 yaşından küçüktür. Koç, öğrenciyle yalnızca platform üzerinden ve eğitim amacıyla iletişim kurmayı, öğrencinin kişisel verilerini hizmet dışında kullanmamayı ve üçüncü kişilerle paylaşmamayı kabul eder.',
+            'Öğrencilerin önemli bir kısmı 18 yaşından küçüktür. Koç, görüşmeleri platformun görüşme odasında (ya da yalnızca platformda eklediği Zoom, Google Meet veya Microsoft Teams bağlantısıyla) yapmayı, görüşmeleri kaydetmemeyi, öğrenciyle yalnızca platform üzerinden ve eğitim amacıyla iletişim kurmayı, öğrencinin kişisel verilerini hizmet dışında kullanmamayı ve üçüncü kişilerle paylaşmamayı kabul eder.',
           ],
         },
         {

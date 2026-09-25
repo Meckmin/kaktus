@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { listConversations } from '@/server/queries/conversation';
 import { formatTry } from '@/lib/onboarding/client-state';
 import { OFFER_STATUS_TR } from '@/lib/offers/state-machine';
+import { joinState } from '@/lib/meetings/rules';
 
 /**
  * Dashboard.
@@ -47,6 +48,29 @@ export default async function PanelPage() {
       .then((u) => u?.roles.includes('ADMIN') ?? false),
   ]);
 
+  // The next meeting either side is part of, until its join window closes.
+  const nextMeeting = await prisma.booking.findFirst({
+    where: {
+      status: 'SCHEDULED',
+      engagementId: { not: null },
+      endsAt: { gte: new Date(Date.now() - 30 * 60_000) },
+      OR: [
+        ...(coach ? [{ coachProfileId: coach.id }] : []),
+        ...(student ? [{ studentProfileId: student.id }] : []),
+      ],
+    },
+    orderBy: { startsAt: 'asc' },
+    select: {
+      id: true,
+      startsAt: true,
+      endsAt: true,
+      coachProfileId: true,
+      coach: { select: { user: { select: { name: true } } } },
+      student: { select: { user: { select: { name: true } } } },
+    },
+  });
+  const nextMeetingOpen = nextMeeting ? joinState(nextMeeting.startsAt, nextMeeting.endsAt) === 'OPEN' : false;
+
   const waiting = conversations.filter((c) => c.awaitingViewer);
   const rest = conversations.filter((c) => !c.awaitingViewer);
 
@@ -85,6 +109,37 @@ export default async function PanelPage() {
           <p className="font-medium">Koç başvurun inceleniyor</p>
           <p className="mt-0.5 text-sm text-muted">Durumu görmek için dokun.</p>
         </Link>
+      )}
+
+      {nextMeeting && (coach || student) && (
+        <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cactus/40 bg-cactus-pale/30 px-5 py-4">
+          <div>
+            <p className="text-sm text-muted">Yaklaşan görüşme</p>
+            <p className="font-medium">
+              {nextMeeting.coachProfileId === coach?.id
+                ? (nextMeeting.student.user.name ?? 'Öğrenci')
+                : (nextMeeting.coach.user.name ?? 'Koç')}{' '}
+              ·{' '}
+              {new Intl.DateTimeFormat('tr-TR', {
+                timeZone: 'Europe/Istanbul',
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                hour: '2-digit',
+                minute: '2-digit',
+              }).format(nextMeeting.startsAt)}
+            </p>
+          </div>
+          <Link
+            href={`/panel/gorusme/${nextMeeting.id}`}
+            className={[
+              'rounded-full px-4 py-2 text-sm font-medium',
+              nextMeetingOpen ? 'bg-cactus text-paper hover:bg-cactus-deep' : 'border border-stone text-muted',
+            ].join(' ')}
+          >
+            {nextMeetingOpen ? 'Görüşmeye gir' : 'Görüşme odası'}
+          </Link>
+        </section>
       )}
 
       {waiting.length > 0 && (

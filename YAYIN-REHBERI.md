@@ -49,6 +49,7 @@ banka hesabı/IBAN, imza beyannamesi.
 | **Supabase** | Veritabanı + belge depolama | Pro önerilir (günlük yedek). Bölge: **Frankfurt (eu-central-1)**. |
 | **Upstash** | İstek sınırlama (Redis) | Ücretsiz plan yeter. Vercel Marketplace'ten eklemek en kolayı. |
 | **Resend** | Giriş ve bildirim e-postaları | Ücretsiz plan başlangıç için yeter. |
+| **Daily** (daily.co) | Uygulama içi görüntülü görüşme | Ayda 10.000 katılımcı-dakika ücretsiz (~80 saatlik birebir görüşme), sonra dakika başı 0,004 $. dashboard.daily.co → Developers → API key. |
 | Google Cloud (opsiyonel) | "Google ile giriş" | İstemiyorsan boş bırak, e-posta ile giriş çalışır. |
 
 ### Supabase kurulumu
@@ -73,6 +74,7 @@ banka hesabı/IBAN, imza beyannamesi.
    | `AUTH_SECRET`, `CRON_SECRET`, `FIELD_ENCRYPTION_KEY` | Her biri için ayrı ayrı `openssl rand -base64 32` |
    | `APP_URL`, `AUTH_URL` | `https://<alan-adın>` (ikisi aynı) |
    | `AUTH_RESEND_KEY` | Resend'den |
+   | `DAILY_API_KEY` | Daily'den (yoksa görüşmeler koçun ekleyeceği Zoom/Meet linkiyle yapılır) |
    | `EMAIL_FROM` | `Kaktüs Koçluk <merhaba@<alan-adın>>` |
    | `PAYMENT_PROVIDER` | Önce `mock`; İyzico onayından sonra `iyzico` |
    | `IYZICO_API_KEY`, `IYZICO_SECRET_KEY`, `IYZICO_BASE_URL` | 4. adımda |
@@ -149,7 +151,11 @@ Kullanım Koşulları · KVKK Aydınlatma Metni · Açık Rıza Metni · Çerez 
 5. **VERBİS:** Kayıt yükümlülüğümüz var mı, yoksa muaf mıyız?
 6. **Sorumluluk sınırı:** Kullanım koşullarındaki sorumluluk sınırlaması tüketiciye karşı
    geçerli mi?
-7. **Koç–öğrenci ilişkisi:** Hizmeti koç veriyor, biz aracıyız. Mesafeli hizmet sözleşmesinin
+7. **Görüntülü görüşme:** Koç ile (çoğu reşit olmayan) öğrenci arasındaki görüşmeler kayıt
+   alınmadan, yurt dışındaki bir sağlayıcı (Daily) üzerinden yapılıyor. Aydınlatma ve açık
+   rıza metinleri bunu yeterince karşılıyor mu? Veli görüşmeye katılabilmeli mi? Kayıt almamak
+   anlaşmazlıklarda kanıt açısından sorun olur mu?
+8. **Koç–öğrenci ilişkisi:** Hizmeti koç veriyor, biz aracıyız. Mesafeli hizmet sözleşmesinin
    tarafları doğru kurgulanmış mı?
 
 Avukatın değişikliklerini bana ilet, metinlere işleyeyim; ya da doğrudan dosyayı düzenle.
@@ -165,7 +171,7 @@ Elektronik ticaret yapan herkes için zorunlu (alan adı gerekli).
 
 ## 7. KVKK işleri (avukatla birlikte)
 
-- Yurt dışı aktarım için Vercel, Supabase, Resend ve Upstash'in veri işleme sözleşmelerini
+- Yurt dışı aktarım için Vercel, Supabase, Resend, Upstash ve Daily'nin veri işleme sözleşmelerini
   (DPA) indir. Avukatın standart sözleşme yolunu seçerse sözleşmeyi imzala ve Kurul'a bildir.
 - VERBİS kaydı (gerekiyorsa).
 - Başvuru kanalı: aydınlatma metnindeki `COMPANY_EMAIL` adresine gelen KVKK taleplerine
@@ -177,6 +183,9 @@ Elektronik ticaret yapan herkes için zorunlu (alan adı gerekli).
 - [ ] Gerçek kartla küçük ödeme + iade başarılı
 - [ ] Vercel → **Cron Jobs** sayfasında `/api/cron/jobs` her 5 dakikada 200 dönüyor
 - [ ] Giriş e-postası kendi alan adından geliyor, spam'e düşmüyor
+- [ ] Test hesaplarıyla bir görüşme daveti gönder, kabul et, saatinde "Görüşmeye gir" ile iki
+      farklı cihazdan bağlan (biri telefon olsun); görüşme sırasında programa görev ekle,
+      karşı tarafta görünüyor mu bak
 - [ ] `/yasal` sayfalarında "taslak" notu yok, alt bilgide şirket bilgileri ve ETBİS görünüyor
 - [ ] Kendi hesabın admin, `/admin` açılıyor
 - [ ] Gerçek koçlar başvurdu ve onaylandı (koçsuz açılan pazaryeri öğrenciye boş sayfa gösterir)

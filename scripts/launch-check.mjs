@@ -77,6 +77,8 @@ check(
   'Vercel Marketplace → Upstash, or console.upstash.com',
 );
 
+check(has('DAILY_API_KEY'), 'DAILY_API_KEY is set (in-app video meetings)', 'dashboard.daily.co → Developers', { warn: true });
+
 // ── Legal identity ────────────────────────────────────────────────────────
 for (const key of ['COMPANY_TITLE', 'COMPANY_ADDRESS', 'COMPANY_TAX_OFFICE', 'COMPANY_TAX_NUMBER', 'COMPANY_EMAIL']) {
   check(has(key), `${key} is set`, 'From your vergi levhası / şirket kaydı');

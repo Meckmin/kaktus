@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { istanbulLocalToDate, isAllowedMeetingUrl } from '@/lib/meetings/rules';
+import { istanbulLocalToDate, isAllowedMeetingUrl, joinState, joinWindow } from '@/lib/meetings/rules';
+import { createMeetingToken, dailyConfigured, roomNameForBooking, upsertRoom } from '@/lib/meetings/daily';
 import {
   InviteError,
   cancelInvite,
@@ -108,4 +109,87 @@ export async function setExternalMeetingLink(bookingId: string, url: string): Pr
   }
   await prisma.booking.update({ where: { id: bookingId }, data: { meetingUrl: trimmed || null } });
   return { ok: true };
+}
+
+export type JoinResult =
+  | { ok: true; url: string }
+  | { ok: false; message: string; fallbackUrl: string | null };
+
+/**
+ * "Görüşmeye gir": checks the caller is a party and the window is open, makes
+ * sure the session's Daily room exists with the right times, and returns a
+ * room URL carrying a personal, expiring token. When Daily isn't configured or
+ * is down, returns the coach's fallback link instead, if there is one.
+ */
+export async function joinMeeting(bookingId: string): Promise<JoinResult> {
+  const userId = await viewer();
+  if (!userId) return { ok: false, message: 'Önce giriş yapman gerekiyor.', fallbackUrl: null };
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: {
+      id: true,
+      status: true,
+      startsAt: true,
+      endsAt: true,
+      meetingUrl: true,
+      videoRoomName: true,
+      coach: { select: { userId: true, user: { select: { name: true } } } },
+      student: { select: { userId: true, user: { select: { name: true } } } },
+    },
+  });
+  const isCoach = booking?.coach.userId === userId;
+  const isStudent = booking?.student.userId === userId;
+  if (!booking || (!isCoach && !isStudent)) {
+    return { ok: false, message: 'Görüşme bulunamadı.', fallbackUrl: null };
+  }
+  const fallbackUrl = booking.meetingUrl;
+  if (booking.status !== 'SCHEDULED') {
+    return { ok: false, message: 'Bu görüşme iptal edilmiş.', fallbackUrl: null };
+  }
+
+  const state = joinState(booking.startsAt, booking.endsAt);
+  if (state === 'TOO_EARLY') {
+    return { ok: false, message: 'Görüşme odası, görüşme saatinden 10 dakika önce açılır.', fallbackUrl: null };
+  }
+  if (state === 'ENDED') return { ok: false, message: 'Bu görüşmenin süresi doldu.', fallbackUrl: null };
+
+  if (!dailyConfigured()) {
+    return {
+      ok: false,
+      message: fallbackUrl
+        ? 'Uygulama içi görüşme şu an kullanılamıyor; koçunun eklediği bağlantıdan katılabilirsin.'
+        : 'Uygulama içi görüşme şu an kullanılamıyor. Koçundan bir Zoom ya da Meet bağlantısı eklemesini iste.',
+      fallbackUrl,
+    };
+  }
+
+  const { opensAt, closesAt } = joinWindow(booking.startsAt, booking.endsAt);
+  try {
+    const room = await upsertRoom({
+      name: booking.videoRoomName ?? roomNameForBooking(booking.id),
+      // A little slack either side of the button's own window.
+      opensAt: new Date(opensAt.getTime() - 5 * 60_000),
+      closesAt: new Date(closesAt.getTime() + 15 * 60_000),
+    });
+    if (booking.videoRoomName !== room.name) {
+      await prisma.booking.update({ where: { id: booking.id }, data: { videoRoomName: room.name } });
+    }
+    const token = await createMeetingToken({
+      roomName: room.name,
+      userName: (isCoach ? booking.coach.user.name : booking.student.user.name) ?? (isCoach ? 'Koç' : 'Öğrenci'),
+      isOwner: isCoach,
+      expiresAt: closesAt,
+    });
+    return { ok: true, url: `${room.url}?t=${encodeURIComponent(token)}` };
+  } catch (error) {
+    console.error('[meetings] daily join failed', error);
+    return {
+      ok: false,
+      message: fallbackUrl
+        ? 'Görüşme odası açılamadı; koçunun eklediği bağlantıdan katılabilirsin.'
+        : 'Görüşme odası açılamadı. Birkaç saniye sonra tekrar dene.',
+      fallbackUrl,
+    };
+  }
 }

@@ -95,6 +95,11 @@ const schema = z
     // stays trivial to trigger by hand while iterating.
     CRON_SECRET: z.string().min(1).optional(),
 
+    // ── In-app video meetings (daily.co) ──────────────────────────────────
+    // Without it the "Görüşmeye gir" button falls back to the coach's own
+    // Zoom/Meet link. Read directly by lib/meetings/daily.ts.
+    DAILY_API_KEY: z.string().min(1).optional(),
+
     // ── Shared rate limiting (Upstash Redis REST) ─────────────────────────
     // Serverless instances don't share memory, so the in-memory limiter is a
     // dev fallback only. Required in production.
