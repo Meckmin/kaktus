@@ -44,12 +44,15 @@ export function dateToDay(date: Date): string {
 }
 
 const DAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+// Not a slice of the full name: that gives "Paz" twice and "Cum" twice.
+const DAY_SHORT = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
 const MONTHS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 
-export function dayLabel(day: string): { weekday: string; date: string } {
+export function dayLabel(day: string): { weekday: string; short: string; date: string } {
   const date = new Date(`${day}T00:00:00Z`);
   return {
     weekday: DAY_NAMES[date.getUTCDay()],
+    short: DAY_SHORT[date.getUTCDay()],
     date: `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`,
   };
 }

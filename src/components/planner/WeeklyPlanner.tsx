@@ -113,6 +113,8 @@ export function WeeklyPlanner({
     return { total: tasks.length, done, questions, minutes };
   }, [tasks]);
 
+  // In a call only the focused day renders; in the week grid every day does,
+  // but below md the others are hidden behind the day tabs.
   const visibleDays = live ? [focusDay] : days;
 
   return (
@@ -151,30 +153,34 @@ export function WeeklyPlanner({
         </button>
       )}
 
-      {live && (
-        <div className="mt-3 flex gap-1 overflow-x-auto">
-          {days.map((day) => {
-            const label = dayLabel(day);
-            const count = tasks.filter((t) => t.day === day).length;
-            return (
-              <button
-                key={day}
-                type="button"
-                onClick={() => {
-                  setFocusDay(day);
-                  setEditing(null);
-                }}
-                className={[
-                  'shrink-0 rounded-lg px-2.5 py-1.5 text-xs',
-                  day === focusDay ? 'bg-cactus text-paper' : 'bg-limestone text-ink hover:bg-stone/40',
-                ].join(' ')}
-              >
-                {label.weekday.slice(0, 3)} {count > 0 && <span className="tabular-nums">· {count}</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* Day tabs: always in a call, and on phones, where seven stacked days
+          would bury today under a long scroll. */}
+      <div className={['mt-3 flex gap-1 overflow-x-auto', live ? '' : 'md:hidden'].join(' ')}>
+        {days.map((day) => {
+          const label = dayLabel(day);
+          const count = tasks.filter((t) => t.day === day).length;
+          return (
+            <button
+              key={day}
+              type="button"
+              onClick={() => {
+                setFocusDay(day);
+                setEditing(null);
+              }}
+              className={[
+                'shrink-0 rounded-lg px-2.5 py-1.5 text-xs',
+                day === focusDay
+                  ? 'bg-cactus text-paper'
+                  : day === today
+                    ? 'bg-cactus-pale text-ink'
+                    : 'bg-limestone text-ink hover:bg-stone/40',
+              ].join(' ')}
+            >
+              {label.short} {count > 0 && <span className="tabular-nums">· {count}</span>}
+            </button>
+          );
+        })}
+      </div>
 
       {error && (
         <p role="alert" className="mt-3 rounded-lg bg-bloom-pale px-4 py-2.5 text-sm">
@@ -190,7 +196,8 @@ export function WeeklyPlanner({
             <div
               key={day}
               className={[
-                'flex min-h-40 flex-col rounded-xl border p-3',
+                'min-h-40 flex-col rounded-xl border p-3',
+                live || day === focusDay ? 'flex' : 'hidden md:flex',
                 day === today ? 'border-cactus/60 bg-cactus-pale/30' : 'border-stone/70 bg-paper',
               ].join(' ')}
             >

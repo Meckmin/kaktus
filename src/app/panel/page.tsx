@@ -81,6 +81,11 @@ export default async function PanelPage() {
           Kaktüs Koçluk
         </Link>
         <div className="flex items-baseline gap-4">
+          {coach?.verificationStatus === 'APPROVED' && (
+            <Link href="/panel/takvim" className="text-sm text-cactus hover:text-cactus-deep">
+              Takvim
+            </Link>
+          )}
           {isAdmin && (
             <Link href="/admin" className="text-sm text-cactus hover:text-cactus-deep">
               Yönetim
@@ -165,7 +170,12 @@ export default async function PanelPage() {
 
       {coach?.verificationStatus === 'APPROVED' && (
         <section className="mt-12">
-          <h2 className="font-display text-lg font-semibold">Koç durumun</h2>
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="font-display text-lg font-semibold">Koç durumun</h2>
+            <Link href="/panel/takvim" className="text-sm text-cactus hover:text-cactus-deep">
+              Tüm öğrencilerin takvimi →
+            </Link>
+          </div>
           <dl className="mt-3 grid gap-px overflow-hidden rounded-xl border border-stone/70 bg-stone/60 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Aktif öğrenci"

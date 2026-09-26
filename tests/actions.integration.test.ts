@@ -85,6 +85,7 @@ const { dateToIstanbulLocal } = await import('@/lib/meetings/rules');
 const { addStudyTask, editStudyTask, removeStudyTask, markStudyTask, loadPlannerWeek, copyPlannerWeek } =
   await import('@/server/actions/planner');
 const { submitReviewAction } = await import('@/server/actions/reviews');
+const { getCoachWeek } = await import('@/server/queries/coach-week');
 
 beforeEach(async () => {
   await resetDatabase();
@@ -1368,6 +1369,75 @@ describe('weekly planner', () => {
         ['TEKRAR', true],
       ]);
     }
+  });
+});
+
+describe('coach week calendar', () => {
+  it("puts every student's meetings, invites and plan progress on one week, and nobody else's", async () => {
+    const { coach, coachUser, student, studentUser, conversation, engagement } = await fundedEngagement();
+    const other = await fundedEngagement(); // another coach, same hour — must not show up
+    const at = (iso: string) => new Date(iso);
+
+    const lesson = await prisma.booking.findFirstOrThrow({ where: { engagementId: engagement.id } });
+    await prisma.booking.update({
+      where: { id: lesson.id },
+      data: { startsAt: at('2026-10-06T16:00:00Z'), endsAt: at('2026-10-06T17:00:00Z') }, // Tue 19:00 Istanbul
+    });
+    const otherLesson = await prisma.booking.findFirstOrThrow({ where: { engagementId: other.engagement.id } });
+    await prisma.booking.update({
+      where: { id: otherLesson.id },
+      data: { startsAt: at('2026-10-06T16:00:00Z'), endsAt: at('2026-10-06T17:00:00Z') },
+    });
+    // Sunday 23:30 in Istanbul is still this week, and still Sunday.
+    await prisma.booking.create({
+      data: {
+        coachProfileId: coach.id,
+        studentProfileId: student.id,
+        engagementId: engagement.id,
+        startsAt: at('2026-10-11T20:30:00Z'),
+        endsAt: at('2026-10-11T21:00:00Z'),
+        status: 'SCHEDULED',
+      },
+    });
+    await prisma.meetingInvite.create({
+      data: {
+        engagementId: engagement.id,
+        startsAt: at('2026-10-08T15:00:00Z'),
+        endsAt: at('2026-10-08T16:00:00Z'),
+        createdById: coachUser.id,
+      },
+    });
+    const task = { conversationId: conversation.id, kind: 'SORU_BANKASI' as const, unit: 'SORU' as const, createdById: coachUser.id };
+    await prisma.studyTask.createMany({
+      data: [
+        { ...task, day: at('2026-10-06'), quantity: 40, completedAt: new Date() },
+        { ...task, day: at('2026-10-07'), quantity: 20 },
+        { ...task, day: at('2026-10-13'), quantity: 99 }, // next week
+      ],
+    });
+
+    const week = await getCoachWeek(coach.id, '2026-10-05');
+
+    expect(week.meetings.map((m) => [m.day, m.conversationId, m.studentName])).toEqual([
+      ['2026-10-06', conversation.id, studentUser.name],
+      ['2026-10-11', conversation.id, studentUser.name],
+    ]);
+    expect(week.invites).toHaveLength(1);
+    expect(week.invites[0]).toMatchObject({ day: '2026-10-08', moving: false, conversationId: conversation.id });
+    expect(week.students).toHaveLength(1);
+    expect(week.students[0]).toMatchObject({
+      conversationId: conversation.id,
+      active: true,
+      tasksTotal: 2,
+      tasksDone: 1,
+      questionsPlanned: 60,
+      questionsDone: 40,
+    });
+    expect(week.students[0].days.slice(0, 3).map((d) => [d.total, d.done])).toEqual([
+      [0, 0],
+      [1, 1],
+      [1, 0],
+    ]);
   });
 });
 

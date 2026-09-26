@@ -36,14 +36,19 @@ export default async function ConversationPage({
             {conversation.counterpartyName}
           </h1>
         </div>
-        {conversation.viewerRole === 'STUDENT' && (
-          <Link
-            href={`/koc/${conversation.coachSlug}`}
-            className="text-sm text-cactus hover:text-cactus-deep"
-          >
-            Profili gör
-          </Link>
-        )}
+        <div className="flex items-baseline gap-4 text-sm">
+          {/* With a program running, meetings and instalments sit above the chat. */}
+          {conversation.engagement && (
+            <a href="#mesajlar" className="text-muted hover:text-cactus">
+              Mesajlar ↓
+            </a>
+          )}
+          {conversation.viewerRole === 'STUDENT' && (
+            <Link href={`/koc/${conversation.coachSlug}`} className="text-cactus hover:text-cactus-deep">
+              Profili gör
+            </Link>
+          )}
+        </div>
       </header>
 
       {conversation.flagged && (

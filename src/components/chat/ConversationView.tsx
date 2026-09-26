@@ -50,15 +50,19 @@ export function ConversationView({ conversation }: { conversation: ConversationV
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [disputeState, setDisputeState] = useState<DisputeState | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setInterval(() => router.refresh(), POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [router]);
 
+  // Only the message box scrolls to the latest entry, not the page: once a
+  // program is running, the meetings and plan above are what people open this
+  // page for, and jumping the whole page to the bottom hid them.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end' });
+    const box = timelineRef.current;
+    if (box) box.scrollTop = box.scrollHeight;
   }, [conversation.timeline.length]);
 
   const run = (fn: () => Promise<{ ok: boolean; message?: string }>) => {
@@ -71,7 +75,7 @@ export function ConversationView({ conversation }: { conversation: ConversationV
   };
 
   return (
-    <div className="flex min-h-[70dvh] flex-col">
+    <div className="flex flex-col">
       {conversation.engagement && (
         <MilestonesPanel
           engagement={conversation.engagement}
@@ -97,41 +101,46 @@ export function ConversationView({ conversation }: { conversation: ConversationV
           />
         )}
 
-      <ol className="flex-1 space-y-4">
-        {conversation.timeline.map((entry) =>
-          entry.kind === 'message' ? (
-            <MessageBubble key={entry.id} entry={entry} />
-          ) : (
-            <OfferBlock
-              key={entry.id}
-              entry={entry}
-              viewerRole={conversation.viewerRole}
-              pending={pending}
-              onAccept={() => run(() => acceptOffer(entry.id))}
-              onDecline={() => run(() => declineOffer(entry.id))}
-              onCounter={(priceMinor, note) => run(() => counterOffer(entry.id, { priceMinor, note }))}
-              onPay={(buyer) => run(async () => {
-                const result = await payForOffer(entry.id, buyer);
-                if (!result.ok) return result;
-                // Iyzico returns a script that renders its own hosted form.
-                const holder = document.getElementById('iyzico-checkout');
-                if (holder) {
-                  holder.innerHTML = result.checkoutFormContent;
-                  holder
-                    .querySelectorAll('script')
-                    .forEach((old) => {
-                      const script = document.createElement('script');
-                      script.textContent = old.textContent;
-                      old.replaceWith(script);
-                    });
-                }
-                return { ok: true };
-              })}
-            />
-          ),
-        )}
-        <div ref={bottomRef} />
-      </ol>
+      <div
+        id="mesajlar"
+        ref={timelineRef}
+        className="mt-2 scroll-mt-6 max-h-[65dvh] min-h-48 overflow-y-auto overscroll-contain rounded-2xl border border-stone/60 p-3 sm:p-4"
+      >
+        <ol className="space-y-4">
+          {conversation.timeline.map((entry) =>
+            entry.kind === 'message' ? (
+              <MessageBubble key={entry.id} entry={entry} />
+            ) : (
+              <OfferBlock
+                key={entry.id}
+                entry={entry}
+                viewerRole={conversation.viewerRole}
+                pending={pending}
+                onAccept={() => run(() => acceptOffer(entry.id))}
+                onDecline={() => run(() => declineOffer(entry.id))}
+                onCounter={(priceMinor, note) => run(() => counterOffer(entry.id, { priceMinor, note }))}
+                onPay={(buyer) => run(async () => {
+                  const result = await payForOffer(entry.id, buyer);
+                  if (!result.ok) return result;
+                  // Iyzico returns a script that renders its own hosted form.
+                  const holder = document.getElementById('iyzico-checkout');
+                  if (holder) {
+                    holder.innerHTML = result.checkoutFormContent;
+                    holder
+                      .querySelectorAll('script')
+                      .forEach((old) => {
+                        const script = document.createElement('script');
+                        script.textContent = old.textContent;
+                        old.replaceWith(script);
+                      });
+                  }
+                  return { ok: true };
+                })}
+              />
+            ),
+          )}
+        </ol>
+      </div>
 
       <div id="iyzico-checkout" className="mt-6 empty:hidden" />
 

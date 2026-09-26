@@ -30,7 +30,9 @@ describe('planner week arithmetic', () => {
   });
 
   it('labels days in Turkish', () => {
-    expect(dayLabel('2026-09-21')).toEqual({ weekday: 'Pazartesi', date: '21 Eyl' });
+    expect(dayLabel('2026-09-21')).toEqual({ weekday: 'Pazartesi', short: 'Pzt', date: '21 Eyl' });
+    // Seven distinct short names — slicing the full ones collided (Paz/Paz, Cum/Cum).
+    expect(new Set(weekDays('2026-09-21').map((d) => dayLabel(d).short)).size).toBe(7);
   });
 });
 
