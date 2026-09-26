@@ -1496,9 +1496,9 @@ describe('joinMeeting', () => {
     }) as typeof fetch;
 
     asUser(coachUser.id);
-    expect(await joinMeeting(booking.id)).toEqual({ ok: true, roomUrl: 'https://kaktus.daily.co/kk-room', token: 'tok_1' });
+    expect(await joinMeeting(booking.id)).toEqual({ ok: true, roomUrl: 'https://kaktus.daily.co/kk-room', token: 'tok_1', fallbackUrl: null });
     asUser(studentUser.id);
-    expect(await joinMeeting(booking.id)).toEqual({ ok: true, roomUrl: 'https://kaktus.daily.co/kk-room', token: 'tok_2' });
+    expect(await joinMeeting(booking.id)).toEqual({ ok: true, roomUrl: 'https://kaktus.daily.co/kk-room', token: 'tok_2', fallbackUrl: null });
 
     expect(tokens.map((t) => [t.is_owner, t.user_id])).toEqual([
       [true, coachUser.id],
