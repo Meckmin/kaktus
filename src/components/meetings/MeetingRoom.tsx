@@ -23,6 +23,9 @@ import type { StudyTaskView } from '@/lib/planner/task-schema';
 type Phase = 'idle' | 'connecting' | 'in-call' | 'left' | 'failed';
 
 const PRESENCE_POLL_MS = 15_000;
+const EXPECTED_ENDINGS = new Set(['exp-room', 'exp-token', 'nbf-room', 'nbf-token']);
+/** Daily's presence endpoint lags the call by up to ~30 s. */
+const PRESENCE_LAG_MS = 30_000;
 
 const THEME = {
   colors: {
@@ -68,6 +71,12 @@ export function MeetingRoom({
   const [error, setError] = useState<string | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [counterpartIn, setCounterpartIn] = useState(false);
+  // Was the other person in this call at some point? "Left" vs "not here yet".
+  const [counterpartSeen, setCounterpartSeen] = useState(false);
+  // Until then, a presence poll saying they're in the room is stale: we saw
+  // them leave inside the call.
+  const knownAbsentUntil = useRef(0);
+  const counterpartInCall = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [deviceProblem, setDeviceProblem] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -97,7 +106,8 @@ export function MeetingRoom({
     let cancelled = false;
     const poll = async () => {
       const result = await meetingPresence(bookingId).catch(() => ({ counterpartPresent: false }));
-      if (!cancelled) setCounterpartIn(result.counterpartPresent);
+      if (cancelled) return;
+      setCounterpartIn(result.counterpartPresent && Date.now() > knownAbsentUntil.current);
     };
     void poll();
     const timer = setInterval(poll, PRESENCE_POLL_MS);
@@ -142,9 +152,14 @@ export function MeetingRoom({
     });
     callRef.current = call;
 
+    setCounterpartSeen(false);
+    counterpartInCall.current = false;
     const countOthers = () => {
       const others = Object.values(call.participants()).filter((p) => !p.local).length;
       setCounterpartIn(others > 0);
+      counterpartInCall.current = others > 0;
+      if (others > 0) setCounterpartSeen(true);
+      else knownAbsentUntil.current = Date.now() + PRESENCE_LAG_MS;
     };
 
     call
@@ -162,13 +177,20 @@ export function MeetingRoom({
       })
       .on('camera-error', () => setDeviceProblem(true))
       .on('left-meeting', () => {
+        // If they weren't in the call when we left, the next presence polls
+        // would still (wrongly) say they were. (participants() may already be
+        // empty here, so go by the last count.)
+        if (!counterpartInCall.current) knownAbsentUntil.current = Date.now() + PRESENCE_LAG_MS;
         void teardown();
         setPhase((current) => (current === 'failed' ? current : 'left'));
       })
       .on('error', (event) => {
         if (event) {
           setError(describeFatal(event));
-          void reportMeetingError(bookingId, event.error?.type ?? 'unknown', event.errorMsg ?? '');
+          // A session running out, or a room not open yet, is how calls end
+          // normally — only log what someone should look at.
+          const type = event.error?.type ?? 'unknown';
+          if (!EXPECTED_ENDINGS.has(type)) void reportMeetingError(bookingId, type, event.errorMsg ?? '');
         }
         // If the coach added a Zoom/Meet link, that's the way in now.
         setFallbackUrl(result.fallbackUrl);
@@ -202,7 +224,11 @@ export function MeetingRoom({
                 className={['size-2 rounded-full', counterpartIn ? 'bg-cactus' : 'bg-stone'].join(' ')}
                 aria-hidden
               />
-              {counterpartIn ? `${counterpartyName} görüşmede` : `${counterpartyName} henüz katılmadı`}
+              {counterpartIn
+                ? `${counterpartyName} görüşmede`
+                : counterpartSeen
+                  ? `${counterpartyName} görüşmeden ayrıldı`
+                  : `${counterpartyName} henüz katılmadı`}
             </span>
             <span className="text-muted tabular-nums">
               {minutesLeft > 5
@@ -265,7 +291,7 @@ export function MeetingRoom({
                 Görüşme odası {clock.format(joinWindow(startsAt, endsAt).opensAt)}’de açılır (görüşmeden 10 dakika
                 önce). Bu sayfayı açık bırakabilirsin.
               </p>
-            ) : (
+            ) : error ? null : (
               <p className="mt-6 text-sm text-muted">
                 {status.startsWith('CANCELLED')
                   ? 'Bu görüşme iptal edildi.'

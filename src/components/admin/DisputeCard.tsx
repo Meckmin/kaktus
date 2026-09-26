@@ -78,9 +78,8 @@ export function DisputeCard({
   const completedBookings = dispute.engagement.bookings.filter((b) => b.status === 'COMPLETED');
   const completed = completedBookings.filter((b) => new Date(b.startsAt).getTime() <= now).length;
   const approvedEarly = completedBookings.length - completed;
-  const ageDays = Math.floor(
-    (Date.now() - new Date(dispute.createdAt).getTime()) / 86_400_000,
-  );
+  // Clamped: a server clock a little ahead must not read "-1 gündür açık".
+  const ageDays = Math.max(0, Math.floor((Date.now() - new Date(dispute.createdAt).getTime()) / 86_400_000));
 
   const submit = () => {
     if (!outcome) return;
