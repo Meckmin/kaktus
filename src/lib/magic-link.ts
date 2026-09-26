@@ -13,8 +13,8 @@ import { sendMail } from './mail-transport';
  *
  * So delivery is decided here (see `deliveryMode` in mail-config.ts):
  *
- *   SMTP or Resend configured, not development  →  send a real email
- *   otherwise                                   →  print the link and write .auth-link.txt
+ *   usable Resend key, not development  →  send a real email
+ *   otherwise                           →  print the link and write .auth-link.txt
  *
  * The fallback is not a mock that pretends to send. It prints the real
  * verification URL, which is a working credential — sign-in genuinely completes
@@ -46,7 +46,7 @@ export async function deliverLocally(request: VerificationRequest): Promise<void
   if (process.env.NODE_ENV === 'production' && process.env.AUTH_ALLOW_LOCAL_LINKS !== '1') {
     throw new Error(
       'Refusing to write sign-in links to disk in production. ' +
-        'Configure SMTP_* or AUTH_RESEND_KEY so sign-in links are emailed.',
+        'Configure AUTH_RESEND_KEY so sign-in links are emailed.',
     );
   }
 
@@ -92,7 +92,7 @@ export async function sendVerificationRequest(request: VerificationRequest): Pro
     // The email is written in Turkish on purpose: Auth.js's default template
     // is English, a jarring thing to receive from a Turkish product at the
     // exact moment someone is deciding whether to trust it.
-    await sendMail(mode, {
+    await sendMail({
       to: request.identifier,
       subject: 'Kaktüs Koçluk giriş bağlantın',
       text: turkishText(request.url),

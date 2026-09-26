@@ -48,7 +48,7 @@ banka hesabı/IBAN, imza beyannamesi.
 | **Vercel** | Site + 5 dakikalık zamanlanmış işler | Pro (~20 $/ay). Hobby planda zamanlanmış işler günde bire iner, otomatik ödeme aktarımı gecikir. |
 | **Supabase** | Veritabanı + belge depolama | Pro önerilir (günlük yedek). Bölge: **Frankfurt (eu-central-1)**. |
 | **Upstash** | İstek sınırlama (Redis) | Ücretsiz plan yeter. Vercel Marketplace'ten eklemek en kolayı. |
-| **Gmail → Resend** | Giriş ve bildirim e-postaları | Alan adı gelene kadar Gmail (uygulama şifresiyle SMTP, günde ~500 mail, ücretsiz). Alan adı alınınca Resend (ücretsiz plan: günde 100, ayda 3.000 mail). |
+| **Resend** | Giriş ve bildirim e-postaları | Ücretsiz plan: günde 100, ayda 3.000 mail. Alan adı doğrulanınca çalışır. |
 | **Daily** (daily.co) | Uygulama içi görüntülü görüşme | Ayda 10.000 katılımcı-dakika ücretsiz (~80 saatlik birebir görüşme), sonra dakika başı 0,004 $. dashboard.daily.co → Developers → API key. |
 | Google Cloud (opsiyonel) | "Google ile giriş" | İstemiyorsan boş bırak, e-posta ile giriş çalışır. |
 
@@ -73,10 +73,9 @@ banka hesabı/IBAN, imza beyannamesi.
    | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Upstash'ten |
    | `AUTH_SECRET`, `CRON_SECRET`, `FIELD_ENCRYPTION_KEY` | Her biri için ayrı ayrı `openssl rand -base64 32` |
    | `APP_URL`, `AUTH_URL` | `https://<alan-adın>` (ikisi aynı) |
-   | `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` | Alan adı gelene kadar: `smtp.gmail.com`, Gmail adresi, uygulama şifresi (bkz. `.env.example`) |
-   | `AUTH_RESEND_KEY` | Alan adı doğrulandıktan sonra, Resend'den |
+   | `AUTH_RESEND_KEY` | Resend'den |
    | `DAILY_API_KEY` | Daily'den (yoksa görüşmeler koçun ekleyeceği Zoom/Meet linkiyle yapılır) |
-   | `EMAIL_FROM` | Resend'e geçince `Kaktüs Koçluk <merhaba@<alan-adın>>` |
+   | `EMAIL_FROM` | `Kaktüs Koçluk <merhaba@<alan-adın>>` |
    | `PAYMENT_PROVIDER` | Önce `mock`; İyzico onayından sonra `iyzico` |
    | `IYZICO_API_KEY`, `IYZICO_SECRET_KEY`, `IYZICO_BASE_URL` | 4. adımda |
    | `COMPANY_*` | 1. adımdaki vergi levhasından |
@@ -101,9 +100,8 @@ banka hesabı/IBAN, imza beyannamesi.
 3. Resend → **Domains → Add Domain** → gösterilen SPF/DKIM kayıtlarını DNS'e ekle → *Verify*.
    Ayrıca bir DMARC kaydı ekle (TXT, ad `_dmarc`, değer `v=DMARC1; p=none; rua=mailto:<COMPANY_EMAIL>`) —
    Gmail ve Outlook, DMARC'ı olmayan alan adlarından gelen postayı daha kolay spam'e atıyor.
-4. `APP_URL`, `AUTH_URL`'u alan adıyla güncelle. E-postayı Gmail'den Resend'e geçir:
-   `EMAIL_PROVIDER=resend`, `EMAIL_FROM="Kaktüs Koçluk <merhaba@<alan-adın>>"`, ve `SMTP_*`
-   değişkenlerini sil → Vercel'de **Redeploy**. `npm run launch-check` gönderici alan adını kontrol eder.
+4. `APP_URL`, `AUTH_URL`, `EMAIL_FROM`'u alan adıyla güncelle → Vercel'de **Redeploy**.
+   `npm run launch-check` gönderici alan adını kontrol eder.
 5. İlk kez giriş yap, sonra kendini admin yap (Supabase → SQL Editor):
    ```sql
    UPDATE "User" SET roles = '{STUDENT,ADMIN}' WHERE email = 'senin@epostan.com';

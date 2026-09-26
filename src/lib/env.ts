@@ -59,14 +59,6 @@ const schema = z
     // link-on-disk fallback in production. See lib/magic-link.ts.
     AUTH_FORCE_EMAIL: z.string().optional(),
     AUTH_ALLOW_LOCAL_LINKS: z.string().optional(),
-    // SMTP — e.g. Gmail with an app password, until the site has its own
-    // domain verified in Resend. See lib/mail-config.ts.
-    EMAIL_PROVIDER: z.enum(['smtp', 'resend']).optional(),
-    SMTP_HOST: z.string().min(1).optional(),
-    SMTP_PORT: z.coerce.number().int().positive().optional(),
-    SMTP_USER: z.string().min(1).optional(),
-    SMTP_PASS: z.string().min(1).optional(),
-    SMTP_FROM: z.string().min(1).optional(),
 
     // ── Payments ────────────────────────────────────────────────────────────
     PAYMENT_PROVIDER: z.enum(['mock', 'iyzico']).default('mock'),
@@ -158,15 +150,10 @@ const schema = z
       need('SUPABASE_SERVICE_ROLE_KEY', 'required when SUPABASE_URL is set');
     }
 
-    const smtpParts = [val.SMTP_HOST, val.SMTP_USER, val.SMTP_PASS].filter(Boolean).length;
-    if (smtpParts > 0 && smtpParts < 3) {
-      need('SMTP_PASS', 'set SMTP_HOST, SMTP_USER and SMTP_PASS together, or none of them');
-    }
-
     if (isProdRuntime) {
       // Without a provider every email sign-in fails — and says so, but still.
-      if (smtpParts < 3 && !(val.AUTH_RESEND_KEY ?? val.RESEND_API_KEY)) {
-        need('SMTP_HOST', 'required in production: configure SMTP_* or AUTH_RESEND_KEY so sign-in links are emailed');
+      if (!(val.AUTH_RESEND_KEY ?? val.RESEND_API_KEY)) {
+        need('AUTH_RESEND_KEY', 'required in production so sign-in links are emailed');
       }
       if (!val.APP_URL.startsWith('https://')) {
         need('APP_URL', 'must be the public https:// address in production');

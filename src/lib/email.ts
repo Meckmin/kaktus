@@ -54,7 +54,7 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
       await deliverLocally(message);
       return;
     }
-    await sendMail(mode, message);
+    await sendMail(message);
   } catch (error) {
     console.error('[notify] delivery failed', { to: message.to, subject: message.subject, error });
   }

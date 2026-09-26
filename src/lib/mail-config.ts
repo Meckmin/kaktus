@@ -1,19 +1,12 @@
 /**
- * Which way mail leaves this environment — no `'server-only'` guard,
+ * Whether and how mail leaves this environment — no `'server-only'` guard,
  * deliberately, so `lib/email.ts` stays importable from the test runner. This
- * file only reads env vars and compares strings; the secrets themselves are
- * only ever used by `lib/mail-transport.ts`.
+ * file only reads env vars and compares strings; the key itself is only used
+ * by `lib/mail-transport.ts`.
  *
- * Two real providers:
- *
- *   - **SMTP** (e.g. a Gmail account with an app password). Works before the
- *     site has a domain of its own; Gmail caps it at ~500 messages a day.
- *   - **Resend**. Needs a domain verified in Resend — with the shared
- *     `onboarding@resend.dev` sender it only delivers to the Resend account's
- *     own address and answers 403 for everyone else.
- *
- * `EMAIL_PROVIDER` picks one explicitly; otherwise SMTP wins when configured
- * (it's the one that works without a domain), then Resend.
+ * The provider is Resend. It needs a domain verified in Resend: with the
+ * shared `onboarding@resend.dev` sender it only delivers to the Resend
+ * account's own address and answers 403 for everyone else.
  */
 
 const PLACEHOLDER_MARKERS = [
@@ -56,40 +49,6 @@ export function isUsableResendKey(key: string | undefined): boolean {
   return !looksLikePlaceholder(value);
 }
 
-export interface SmtpSettings {
-  host: string;
-  port: number;
-  /** Implicit TLS (port 465). Port 587 upgrades with STARTTLS instead. */
-  secure: boolean;
-  user: string;
-  pass: string;
-}
-
-export function readSmtpSettings(): SmtpSettings | null {
-  const host = process.env.SMTP_HOST?.trim();
-  const user = process.env.SMTP_USER?.trim();
-  // Google shows app passwords in groups of four ("abcd efgh ijkl mnop");
-  // people paste them with the spaces.
-  const pass = process.env.SMTP_PASS?.replace(/\s+/g, '');
-  if (!host || !user || !pass || looksLikePlaceholder(pass)) return null;
-  const port = Number(process.env.SMTP_PORT || 465);
-  return { host, port, secure: port === 465, user, pass };
-}
-
-export type MailProvider = 'smtp' | 'resend';
-
-/** The configured provider, or null when nothing usable is configured. */
-export function mailProvider(): MailProvider | null {
-  const explicit = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
-  const smtp = readSmtpSettings() !== null;
-  const resend = isUsableResendKey(readResendKey());
-  if (explicit === 'smtp') return smtp ? 'smtp' : null;
-  if (explicit === 'resend') return resend ? 'resend' : null;
-  if (smtp) return 'smtp';
-  if (resend) return 'resend';
-  return null;
-}
-
 /**
  * Addresses that can never receive mail: RFC 2606/6761 reserved names and the
  * seed/test accounts. Outside production they are routed to the local log, so
@@ -106,7 +65,7 @@ export function isReservedTestAddress(email: string): boolean {
   );
 }
 
-export type DeliveryMode = MailProvider | 'local';
+export type DeliveryMode = 'resend' | 'local';
 
 /**
  * Where a message to `to` goes.
@@ -118,9 +77,8 @@ export type DeliveryMode = MailProvider | 'local';
 export function deliveryMode(to?: string): DeliveryMode {
   if (process.env.NODE_ENV === 'test' || process.env.VITEST) return 'local';
 
-  const provider = mailProvider();
-  if (!provider) return 'local';
+  if (!isUsableResendKey(readResendKey())) return 'local';
   if (process.env.NODE_ENV === 'development' && process.env.AUTH_FORCE_EMAIL !== '1') return 'local';
   if (to && process.env.NODE_ENV !== 'production' && isReservedTestAddress(to)) return 'local';
-  return provider;
+  return 'resend';
 }

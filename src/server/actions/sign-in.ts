@@ -15,8 +15,8 @@ import { checkSignInEmail } from '@/server/services/email-check';
  * student could wait for an email that was never going to come.
  *
  * Rate-limited per address and per IP: every call sends a real email, which
- * makes an open endpoint a way to flood someone's inbox — and Gmail's SMTP
- * allowance is ~500 a day for the whole site.
+ * makes an open endpoint a way to flood someone's inbox — and Resend's free
+ * plan allows 100 a day for the whole site.
  */
 
 export type SignInLinkResult = { ok: true } | { ok: false; message: string; suggestion?: string };
