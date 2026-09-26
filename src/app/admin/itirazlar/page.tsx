@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { DisputeCard } from '@/components/admin/DisputeCard';
+import { DisputeCard, type SessionAttendance } from '@/components/admin/DisputeCard';
+import { dailyConfigured, roomAttendance } from '@/lib/meetings/daily';
+import { joinWindow } from '@/lib/meetings/rules';
 
 /**
  * Dispute queue.
@@ -39,14 +41,14 @@ export default async function DisputesPage() {
           id: true,
           totalMinor: true,
           startDate: true,
-          coach: { select: { user: { select: { name: true } } } },
-          student: { select: { user: { select: { name: true } } } },
+          coach: { select: { userId: true, user: { select: { name: true } } } },
+          student: { select: { userId: true, user: { select: { name: true } } } },
           milestones: {
             orderBy: { index: 'asc' },
             select: { index: true, status: true, amountMinor: true },
           },
           bookings: {
-            select: { status: true, startsAt: true },
+            select: { id: true, status: true, startsAt: true, endsAt: true, videoRoomName: true },
             orderBy: { startsAt: 'asc' },
             take: 20,
           },
@@ -54,6 +56,36 @@ export default async function DisputesPage() {
       },
     },
   });
+
+  // Who actually joined each past in-app video session, from Daily's log —
+  // the strongest evidence for "the coach never showed up".
+  const attendance = new Map<string, SessionAttendance>();
+  if (dailyConfigured()) {
+    const now = new Date();
+    await Promise.all(
+      disputes.flatMap((dispute) =>
+        dispute.engagement.bookings
+          .filter((b) => b.videoRoomName && b.startsAt < now)
+          .map(async (b) => {
+            const { opensAt, closesAt } = joinWindow(b.startsAt, b.endsAt);
+            try {
+              const rows = await roomAttendance(b.videoRoomName!, new Date(opensAt.getTime() - 5 * 60_000), closesAt);
+              const of = (userId: string) => {
+                const row = rows.find((r) => r.userId === userId);
+                return row ? { joinedAt: row.firstJoinedAt.toISOString(), minutes: Math.round(row.seconds / 60) } : null;
+              };
+              attendance.set(b.id, {
+                coach: of(dispute.engagement.coach.userId),
+                student: of(dispute.engagement.student.userId),
+              });
+            } catch (error) {
+              console.error('[admin] attendance lookup failed', error);
+              attendance.set(b.id, 'unavailable');
+            }
+          }),
+      ),
+    );
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10 sm:px-8">
@@ -73,7 +105,13 @@ export default async function DisputesPage() {
       ) : (
         <div className="mt-8 space-y-4">
           {disputes.map((dispute) => (
-            <DisputeCard key={dispute.id} dispute={JSON.parse(JSON.stringify(dispute))} />
+            <DisputeCard
+              key={dispute.id}
+              dispute={JSON.parse(JSON.stringify(dispute))}
+              attendance={Object.fromEntries(
+                dispute.engagement.bookings.filter((b) => attendance.has(b.id)).map((b) => [b.id, attendance.get(b.id)!]),
+              )}
+            />
           ))}
         </div>
       )}

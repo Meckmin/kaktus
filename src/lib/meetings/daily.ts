@@ -20,15 +20,17 @@ export function dailyConfigured(): boolean {
   return Boolean(process.env.DAILY_API_KEY?.trim());
 }
 
-async function call<T>(path: string, body: unknown): Promise<T> {
+async function call<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API}${path}`, {
-    method: 'POST',
+    method: body === undefined ? 'GET' : 'POST',
     headers: {
       Authorization: `Bearer ${process.env.DAILY_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',
+    // Someone is waiting on a button; a hung API must not hang the page.
+    signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
@@ -64,6 +66,8 @@ export async function upsertRoom(args: { name: string; opensAt: Date; closesAt: 
 
 export async function createMeetingToken(args: {
   roomName: string;
+  /** Our user id — comes back in presence and attendance, so we know who was there. */
+  userId: string;
   userName: string;
   isOwner: boolean;
   expiresAt: Date;
@@ -71,6 +75,7 @@ export async function createMeetingToken(args: {
   const { token } = await call<{ token: string }>('/meeting-tokens', {
     properties: {
       room_name: args.roomName,
+      user_id: args.userId,
       user_name: args.userName,
       is_owner: args.isOwner,
       exp: seconds(args.expiresAt),
@@ -83,4 +88,60 @@ export async function createMeetingToken(args: {
 /** Daily room names allow letters, numbers, "-" and "_"; booking ids are cuids. */
 export function roomNameForBooking(bookingId: string): string {
   return `kk-${bookingId.toLowerCase().replace(/[^a-z0-9_-]/g, '')}`;
+}
+
+/** User ids of everyone in the room right now. Empty when the room doesn't exist yet. */
+export async function roomPresence(roomName: string): Promise<string[]> {
+  try {
+    const { data } = await call<{ data?: Array<{ userId?: string | null }> }>(
+      `/rooms/${encodeURIComponent(roomName)}/presence`,
+    );
+    return (data ?? []).map((p) => p.userId).filter((id): id is string => Boolean(id));
+  } catch (error) {
+    if (error instanceof DailyError && error.status === 404) return [];
+    throw error;
+  }
+}
+
+export interface Attendance {
+  userId: string;
+  /** First time they joined within the window. */
+  firstJoinedAt: Date;
+  /** Summed over every join (people drop and rejoin). */
+  seconds: number;
+}
+
+/**
+ * Who was in a room between `from` and `to`, from Daily's meeting-session
+ * log — the record a dispute over "the coach never showed up" turns on.
+ * Sessions are filtered by time because a rescheduled booking reuses its
+ * room name.
+ */
+export async function roomAttendance(roomName: string, from: Date, to: Date): Promise<Attendance[]> {
+  const query = new URLSearchParams({
+    room: roomName,
+    timeframe_start: String(seconds(from)),
+    timeframe_end: String(seconds(to)),
+    limit: '100',
+  });
+  const { data } = await call<{
+    data?: Array<{ participants?: Array<{ user_id?: string | null; join_time: number; duration: number }> }>;
+  }>(`/meetings?${query}`);
+
+  const byUser = new Map<string, Attendance>();
+  for (const session of data ?? []) {
+    for (const p of session.participants ?? []) {
+      if (!p.user_id) continue;
+      const joinedAt = new Date(p.join_time * 1000);
+      if (joinedAt < from || joinedAt > to) continue;
+      const seen = byUser.get(p.user_id);
+      if (seen) {
+        seen.seconds += p.duration;
+        if (joinedAt < seen.firstJoinedAt) seen.firstJoinedAt = joinedAt;
+      } else {
+        byUser.set(p.user_id, { userId: p.user_id, firstJoinedAt: joinedAt, seconds: p.duration });
+      }
+    }
+  }
+  return [...byUser.values()];
 }

@@ -19,8 +19,25 @@ interface Dispute {
     coach: { user: { name: string | null } };
     student: { user: { name: string | null } };
     milestones: Array<{ index: number; status: string; amountMinor: number }>;
-    bookings: Array<{ status: string; startsAt: string }>;
+    bookings: Array<{ id: string; status: string; startsAt: string; videoRoomName: string | null }>;
   };
+}
+
+type Presence = { joinedAt: string; minutes: number } | null;
+/** Per in-app video session: who joined, or 'unavailable' when Daily couldn't be asked. */
+export type SessionAttendance = { coach: Presence; student: Presence } | 'unavailable';
+
+const when = new Intl.DateTimeFormat('tr-TR', {
+  timeZone: 'Europe/Istanbul',
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const clock = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' });
+
+function describePresence(who: string, p: Presence) {
+  return p ? `${who} ${p.minutes} dk (${clock.format(new Date(p.joinedAt))}’de girdi)` : `${who} katılmadı`;
 }
 
 const REASON_TR: Record<string, string> = {
@@ -32,7 +49,13 @@ const REASON_TR: Record<string, string> = {
   OTHER: 'Diğer',
 };
 
-export function DisputeCard({ dispute }: { dispute: Dispute }) {
+export function DisputeCard({
+  dispute,
+  attendance = {},
+}: {
+  dispute: Dispute;
+  attendance?: Record<string, SessionAttendance>;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [outcome, setOutcome] = useState<'RELEASE' | 'REFUND' | 'SPLIT' | null>(null);
@@ -108,6 +131,32 @@ export function DisputeCard({ dispute }: { dispute: Dispute }) {
         />
         <Fact label="Gelinmeyen" value={String(noShows)} />
       </dl>
+
+      {Object.keys(attendance).length > 0 && (
+        <div className="mt-4">
+          <h3 className="text-sm font-medium">Uygulama içi görüşme kayıtları</h3>
+          <ul className="mt-2 divide-y divide-stone/60 rounded-xl border border-stone/70 text-sm">
+            {dispute.engagement.bookings
+              .filter((b) => attendance[b.id])
+              .map((b) => {
+                const record = attendance[b.id];
+                return (
+                  <li key={b.id} className="flex flex-wrap justify-between gap-x-4 gap-y-1 px-4 py-2.5">
+                    <span className="tabular-nums">{when.format(new Date(b.startsAt))}</span>
+                    <span className="text-muted">
+                      {record === 'unavailable'
+                        ? 'Kayıt alınamadı'
+                        : `${describePresence('Koç', record.coach)} · ${describePresence('Öğrenci', record.student)}`}
+                    </span>
+                  </li>
+                );
+              })}
+          </ul>
+          <p className="mt-1.5 text-xs text-muted">
+            Daily’nin oturum kayıtlarından. Harici bağlantıyla (Zoom, Meet) yapılan görüşmeler burada görünmez.
+          </p>
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="mt-4 rounded-lg bg-bloom-pale px-4 py-2.5 text-sm">

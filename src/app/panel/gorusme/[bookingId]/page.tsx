@@ -16,7 +16,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ bookin
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
-    select: { startsAt: true, endsAt: true, coachProfileId: true, studentProfileId: true },
+    select: { startsAt: true, endsAt: true, status: true, coachProfileId: true, studentProfileId: true },
   });
   if (!booking) notFound();
 
@@ -45,6 +45,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ bookin
         bookingId={bookingId}
         startsAt={booking.startsAt}
         endsAt={booking.endsAt}
+        status={booking.status}
         counterpartyName={access.counterpartyName}
         conversationId={conversation.id}
         role={access.role}

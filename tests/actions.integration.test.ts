@@ -77,7 +77,7 @@ const {
 const { approveCoach, resolveDisputeAction } = await import('@/server/actions/admin');
 const { submitOffer } = await import('@/server/actions/offers');
 const { submitCoachApplication } = await import('@/server/actions/coach-application');
-const { sendMeetingInvite, answerMeetingInvite, withdrawMeetingInvite, setExternalMeetingLink, joinMeeting } =
+const { sendMeetingInvite, answerMeetingInvite, withdrawMeetingInvite, setExternalMeetingLink, joinMeeting, meetingPresence } =
   await import('@/server/actions/meetings');
 const { expireInvites } = await import('@/server/services/meeting-invite-service');
 const { closeMilestones, runMilestoneWorker } = await import('@/jobs/milestones');
@@ -1446,6 +1446,7 @@ describe('joinMeeting', () => {
   afterEach(() => {
     globalThis.fetch = realFetch;
     delete process.env.DAILY_API_KEY;
+    vi.restoreAllMocks();
   });
 
   async function meetingStartingIn(minutes: number) {
@@ -1484,7 +1485,7 @@ describe('joinMeeting', () => {
   it('opens the Daily room with a personal token, owner rights for the coach only', async () => {
     const { coachUser, studentUser, booking } = await meetingStartingIn(5);
     process.env.DAILY_API_KEY = 'daily-test-key';
-    const tokens: Array<{ is_owner: boolean }> = [];
+    const tokens: Array<{ is_owner: boolean; user_id: string }> = [];
     globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       if (String(url).endsWith('/meeting-tokens')) {
@@ -1495,12 +1496,65 @@ describe('joinMeeting', () => {
     }) as typeof fetch;
 
     asUser(coachUser.id);
-    expect(await joinMeeting(booking.id)).toEqual({ ok: true, url: 'https://kaktus.daily.co/kk-room?t=tok_1' });
+    expect(await joinMeeting(booking.id)).toEqual({ ok: true, roomUrl: 'https://kaktus.daily.co/kk-room', token: 'tok_1' });
     asUser(studentUser.id);
-    expect(await joinMeeting(booking.id)).toEqual({ ok: true, url: 'https://kaktus.daily.co/kk-room?t=tok_2' });
+    expect(await joinMeeting(booking.id)).toEqual({ ok: true, roomUrl: 'https://kaktus.daily.co/kk-room', token: 'tok_2' });
 
-    expect(tokens.map((t) => t.is_owner)).toEqual([true, false]);
+    expect(tokens.map((t) => [t.is_owner, t.user_id])).toEqual([
+      [true, coachUser.id],
+      [false, studentUser.id],
+    ]);
     expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).videoRoomName).toBe('kk-room');
+  });
+
+  it('refuses a cancelled session and one whose window has closed', async () => {
+    const { studentUser, booking } = await meetingStartingIn(5);
+    process.env.DAILY_API_KEY = 'daily-test-key';
+    asUser(studentUser.id);
+    await prisma.booking.update({ where: { id: booking.id }, data: { status: 'CANCELLED_BY_COACH' } });
+    expect(await joinMeeting(booking.id)).toMatchObject({ ok: false, message: 'Bu görüşme iptal edilmiş.' });
+
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: 'SCHEDULED', startsAt: new Date(Date.now() - 3 * 3_600_000), endsAt: new Date(Date.now() - 2 * 3_600_000) },
+    });
+    expect(await joinMeeting(booking.id)).toMatchObject({ ok: false, message: 'Bu görüşmenin süresi doldu.' });
+  });
+
+  it('keeps the fallback link when Daily is down', async () => {
+    const { studentUser, booking } = await meetingStartingIn(5);
+    await prisma.booking.update({ where: { id: booking.id }, data: { meetingUrl: 'https://us02web.zoom.us/j/1' } });
+    process.env.DAILY_API_KEY = 'daily-test-key';
+    globalThis.fetch = vi.fn(async () => new Response('{"error":"server"}', { status: 503 })) as typeof fetch;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    asUser(studentUser.id);
+    expect(await joinMeeting(booking.id)).toEqual({
+      ok: false,
+      message: 'Görüşme odası açılamadı; koçunun eklediği bağlantıdan katılabilirsin.',
+      fallbackUrl: 'https://us02web.zoom.us/j/1',
+    });
+  });
+
+  it('tells each side whether the other is already in the room, and nobody else', async () => {
+    const { coachUser, studentUser, booking } = await meetingStartingIn(5);
+    await prisma.booking.update({ where: { id: booking.id }, data: { videoRoomName: 'kk-room' } });
+    process.env.DAILY_API_KEY = 'daily-test-key';
+    let inRoom: string[] = [];
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ total_count: inRoom.length, data: inRoom.map((userId) => ({ userId })) })),
+    ) as typeof fetch;
+
+    asUser(studentUser.id);
+    expect(await meetingPresence(booking.id)).toEqual({ counterpartPresent: false });
+    inRoom = [coachUser.id];
+    expect(await meetingPresence(booking.id)).toEqual({ counterpartPresent: true });
+    inRoom = [studentUser.id]; // only themselves
+    expect(await meetingPresence(booking.id)).toEqual({ counterpartPresent: false });
+
+    const { user: stranger } = await makeStudent();
+    asUser(stranger.id);
+    inRoom = [coachUser.id, studentUser.id];
+    expect(await meetingPresence(booking.id)).toEqual({ counterpartPresent: false });
   });
 });
 

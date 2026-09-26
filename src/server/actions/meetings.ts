@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { istanbulLocalToDate, isAllowedMeetingUrl, joinState, joinWindow } from '@/lib/meetings/rules';
-import { createMeetingToken, dailyConfigured, roomNameForBooking, upsertRoom } from '@/lib/meetings/daily';
+import { createMeetingToken, dailyConfigured, roomNameForBooking, roomPresence, upsertRoom } from '@/lib/meetings/daily';
 import {
   InviteError,
   cancelInvite,
@@ -112,14 +112,15 @@ export async function setExternalMeetingLink(bookingId: string, url: string): Pr
 }
 
 export type JoinResult =
-  | { ok: true; url: string }
+  | { ok: true; roomUrl: string; token: string }
   | { ok: false; message: string; fallbackUrl: string | null };
 
 /**
  * "Görüşmeye gir": checks the caller is a party and the window is open, makes
  * sure the session's Daily room exists with the right times, and returns a
- * room URL carrying a personal, expiring token. When Daily isn't configured or
- * is down, returns the coach's fallback link instead, if there is one.
+ * room URL and a personal, expiring token (kept out of the URL, so it never
+ * lands in browser history). When Daily isn't configured or is down, returns
+ * the coach's fallback link instead, if there is one.
  */
 export async function joinMeeting(bookingId: string): Promise<JoinResult> {
   const userId = await viewer();
@@ -177,11 +178,12 @@ export async function joinMeeting(bookingId: string): Promise<JoinResult> {
     }
     const token = await createMeetingToken({
       roomName: room.name,
+      userId,
       userName: (isCoach ? booking.coach.user.name : booking.student.user.name) ?? (isCoach ? 'Koç' : 'Öğrenci'),
       isOwner: isCoach,
       expiresAt: closesAt,
     });
-    return { ok: true, url: `${room.url}?t=${encodeURIComponent(token)}` };
+    return { ok: true, roomUrl: room.url, token };
   } catch (error) {
     console.error('[meetings] daily join failed', error);
     return {
@@ -191,5 +193,38 @@ export async function joinMeeting(bookingId: string): Promise<JoinResult> {
         : 'Görüşme odası açılamadı. Birkaç saniye sonra tekrar dene.',
       fallbackUrl,
     };
+  }
+}
+
+/**
+ * Whether the other person is already in the room — for the waiting screen
+ * ("Koçun odada, seni bekliyor"). Quietly false whenever it can't tell.
+ */
+export async function meetingPresence(bookingId: string): Promise<{ counterpartPresent: boolean }> {
+  const none = { counterpartPresent: false };
+  const userId = await viewer();
+  if (!userId || !dailyConfigured()) return none;
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: {
+      status: true,
+      startsAt: true,
+      endsAt: true,
+      videoRoomName: true,
+      coach: { select: { userId: true } },
+      student: { select: { userId: true } },
+    },
+  });
+  if (!booking || booking.status !== 'SCHEDULED' || !booking.videoRoomName) return none;
+  const counterpart =
+    booking.coach.userId === userId ? booking.student.userId : booking.student.userId === userId ? booking.coach.userId : null;
+  if (!counterpart || joinState(booking.startsAt, booking.endsAt) !== 'OPEN') return none;
+
+  try {
+    return { counterpartPresent: (await roomPresence(booking.videoRoomName)).includes(counterpart) };
+  } catch (error) {
+    console.error('[meetings] presence failed', error);
+    return none;
   }
 }
