@@ -1,7 +1,8 @@
 import 'server-only';
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { deliveryMode, isUsableResendKey, readResendKey } from './resend-config';
+import { deliveryMode } from './mail-config';
+import { sendMail } from './mail-transport';
 
 /**
  * Magic-link delivery.
@@ -10,17 +11,17 @@ import { deliveryMode, isUsableResendKey, readResendKey } from './resend-config'
  * no key — the normal state on a fresh local checkout — that is a 401 and a
  * dead sign-in flow, which blocks *every* seeded account at once.
  *
- * So delivery is decided here, before anything is instantiated:
+ * So delivery is decided here (see `deliveryMode` in mail-config.ts):
  *
- *   usable key + not development  →  send via Resend's REST API
- *   otherwise                     →  print the link and write .auth-link.txt
+ *   SMTP or Resend configured, not development  →  send a real email
+ *   otherwise                                   →  print the link and write .auth-link.txt
  *
  * The fallback is not a mock that pretends to send. It prints the real
  * verification URL, which is a working credential — sign-in genuinely completes
  * locally with no third-party account at all.
  */
 
-export { deliveryMode, isUsableResendKey, readResendKey };
+export { deliveryMode };
 
 export const AUTH_LINK_FILE = '.auth-link.txt';
 
@@ -45,7 +46,7 @@ export async function deliverLocally(request: VerificationRequest): Promise<void
   if (process.env.NODE_ENV === 'production' && process.env.AUTH_ALLOW_LOCAL_LINKS !== '1') {
     throw new Error(
       'Refusing to write sign-in links to disk in production. ' +
-        'Configure AUTH_RESEND_KEY with a valid Resend key.',
+        'Configure SMTP_* or AUTH_RESEND_KEY so sign-in links are emailed.',
     );
   }
 
@@ -79,58 +80,31 @@ export async function deliverLocally(request: VerificationRequest): Promise<void
   }
 }
 
-/**
- * Sends via Resend's REST API directly.
- *
- * No SDK: it is one HTTP call, and going direct means the client is never
- * constructed on a path where the key might be missing. It also lets the email
- * be written in Turkish — Auth.js's default template is English, which is a
- * jarring thing to receive from a Turkish product at the exact moment someone
- * is deciding whether to trust it.
- */
-export async function deliverByResend(request: VerificationRequest): Promise<void> {
-  const key = readResendKey();
-  if (!isUsableResendKey(key)) {
-    throw new Error('deliverByResend called without a usable Resend key');
-  }
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: request.from ?? 'Kaktüs Koçluk <merhaba@kaktuskocluk.com>',
-      to: [request.identifier],
-      subject: 'Kaktüs Koçluk giriş bağlantın',
-      text: turkishText(request.url),
-      html: turkishHtml(request.url),
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Resend rejected the request (${response.status}): ${detail.slice(0, 300)}`);
-  }
-}
-
 /** Entry point handed to Auth.js. */
 export async function sendVerificationRequest(request: VerificationRequest): Promise<void> {
-  if (deliveryMode() === 'local') {
+  const mode = deliveryMode(request.identifier);
+  if (mode === 'local') {
     await deliverLocally(request);
     return;
   }
 
   try {
-    await deliverByResend(request);
+    // The email is written in Turkish on purpose: Auth.js's default template
+    // is English, a jarring thing to receive from a Turkish product at the
+    // exact moment someone is deciding whether to trust it.
+    await sendMail(mode, {
+      to: request.identifier,
+      subject: 'Kaktüs Koçluk giriş bağlantın',
+      text: turkishText(request.url),
+      html: turkishHtml(request.url),
+    });
   } catch (error) {
     // A provider outage should not silently swallow the sign-in. Outside
     // production we fall back to the console so work continues; in production
     // it must surface, because the user is waiting for an email that is not
     // coming and needs to see an error rather than a "check your inbox" lie.
     if (process.env.NODE_ENV === 'production') throw error;
-    console.error('[auth] Resend failed, falling back to local link:', error);
+    console.error(`[auth] ${mode} delivery failed, falling back to local link:`, error);
     await deliverLocally(request);
   }
 }

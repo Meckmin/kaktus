@@ -42,18 +42,31 @@ check(
 );
 
 // ── Email ─────────────────────────────────────────────────────────────────
-check(has('AUTH_RESEND_KEY') || has('RESEND_API_KEY'), 'Resend API key is set', 'Create a key at resend.com → API Keys');
-const from = env.EMAIL_FROM ?? '';
-const fromDomain = from.match(/@([^>\s]+)/)?.[1] ?? '';
+const smtpReady = has('SMTP_HOST') && has('SMTP_USER') && has('SMTP_PASS');
+const resendReady = has('AUTH_RESEND_KEY') || has('RESEND_API_KEY');
+const provider = env.EMAIL_PROVIDER || (smtpReady ? 'smtp' : resendReady ? 'resend' : null);
 check(
-  fromDomain && !fromDomain.endsWith('resend.dev'),
-  'EMAIL_FROM uses your own verified domain',
-  'Verify the domain in Resend, then EMAIL_FROM="Kaktüs Koçluk <merhaba@alan-adın>"',
+  provider === 'smtp' ? smtpReady : provider === 'resend' ? resendReady : false,
+  `A mail provider is configured (${provider ?? 'none'})`,
+  'Set SMTP_HOST/SMTP_USER/SMTP_PASS or AUTH_RESEND_KEY — see YAYIN-REHBERI.md → E-posta',
+);
+const addressOf = (value) => (value.match(/<([^>]+)>/)?.[1] ?? value).trim().toLowerCase();
+const sender =
+  provider === 'smtp'
+    ? env.SMTP_FROM ||
+      (env.EMAIL_FROM && addressOf(env.EMAIL_FROM) === (env.SMTP_USER ?? '').toLowerCase() ? env.EMAIL_FROM : env.SMTP_USER ?? '')
+    : env.EMAIL_FROM ?? '';
+const fromDomain = addressOf(sender).split('@')[1] ?? '';
+const SHARED_DOMAINS = ['resend.dev', 'gmail.com', 'googlemail.com', 'hotmail.com', 'outlook.com', 'yandex.com', 'icloud.com', 'yahoo.com'];
+check(
+  fromDomain && !SHARED_DOMAINS.includes(fromDomain),
+  `Mail is sent from your own domain (now: ${fromDomain || 'unknown'})`,
+  'Verify the domain in Resend, then EMAIL_PROVIDER=resend and EMAIL_FROM="Kaktüs Koçluk <merhaba@alan-adın>"',
 );
 const appHost = host(env.APP_URL ?? '') ?? '';
 check(
   fromDomain && appHost && appHost.endsWith(fromDomain.replace(/^mail\./, '')),
-  'EMAIL_FROM domain matches the site domain',
+  'Sender domain matches the site domain',
   'Send from the same domain the site runs on',
   { warn: true },
 );

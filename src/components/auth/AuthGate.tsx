@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { signIn } from 'next-auth/react';
+import { EmailLinkForm } from '@/components/auth/EmailLinkForm';
 import { TermsNotice } from '@/components/legal/TermsNotice';
 
 /**
@@ -67,8 +68,6 @@ export function AuthGateProvider({
 }
 
 function AuthGateModal({ intent, onClose }: { intent: GateIntent; onClose: () => void }) {
-  const [email, setEmail] = useState('');
-  const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -110,17 +109,6 @@ function AuthGateModal({ intent, onClose }: { intent: GateIntent; onClose: () =>
     };
   }, []);
 
-  const sendLink = async () => {
-    if (!email.includes('@')) return;
-    setSending(true);
-    try {
-      await signIn('resend', { email, callbackUrl: intent.returnTo, redirect: false });
-      setSent(true);
-    } finally {
-      setSending(false);
-    }
-  };
-
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-end bg-ink/40 p-0 backdrop-blur-[2px] sm:place-items-center sm:p-6"
@@ -150,19 +138,16 @@ function AuthGateModal({ intent, onClose }: { intent: GateIntent; onClose: () =>
           </button>
         </div>
 
-        {sent ? (
+        {!sent && (
           <p className="mt-3 leading-relaxed text-muted">
-            <span className="font-medium text-ink">{email}</span> adresine giriş bağlantısı
-            gönderdik. Bağlantıya tıkladığında kaldığın yerden devam edeceksin.
+            {intent.note ??
+              'Cevapladığın beş soru kayıtlı. Giriş yaptığında profilin otomatik oluşur ve tam buraya geri dönersin.'}
           </p>
-        ) : (
-          <>
-            <p className="mt-3 leading-relaxed text-muted">
-              {intent.note ??
-                'Cevapladığın beş soru kayıtlı. Giriş yaptığında profilin otomatik oluşur ve tam buraya geri dönersin.'}
-            </p>
+        )}
 
-            <div className="mt-6 space-y-3">
+        <div className="mt-6 space-y-3">
+          {!sent && (
+            <>
               <button
                 type="button"
                 onClick={() => signIn('google', { callbackUrl: intent.returnTo })}
@@ -177,29 +162,12 @@ function AuthGateModal({ intent, onClose }: { intent: GateIntent; onClose: () =>
                 ya da
                 <span className="h-px flex-1 bg-stone/70" />
               </div>
+            </>
+          )}
 
-              <input
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                onKeyDown={(event) => event.key === 'Enter' && sendLink()}
-                placeholder="ornek@eposta.com"
-                className="w-full rounded-xl border border-stone bg-white px-4 py-3.5 outline-none placeholder:text-stone focus:border-cactus"
-              />
-              <button
-                type="button"
-                onClick={sendLink}
-                disabled={sending || !email.includes('@')}
-                className="w-full rounded-xl bg-cactus px-5 py-3.5 font-medium text-paper transition-colors hover:bg-cactus-deep disabled:bg-stone disabled:text-muted"
-              >
-                {sending ? 'Gönderiliyor' : 'Giriş bağlantısı gönder'}
-              </button>
-              <TermsNotice />
-            </div>
-          </>
-        )}
+          <EmailLinkForm callbackUrl={intent.returnTo} onSentChange={setSent} />
+          {!sent && <TermsNotice />}
+        </div>
       </div>
     </div>
   );

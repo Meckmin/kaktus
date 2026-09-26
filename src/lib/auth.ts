@@ -25,7 +25,8 @@ declare module 'next-auth' {
 // asked. Printed on the server only.
 if (deliveryMode() === 'local' && env.NODE_ENV !== 'test') {
   console.log(
-    '[auth] Magic links print to the console and .auth-link.txt (no Resend key configured).',
+    '[auth] Magic links print to the console and .auth-link.txt ' +
+      '(no mail provider configured, or AUTH_FORCE_EMAIL is off in development).',
   );
 }
 

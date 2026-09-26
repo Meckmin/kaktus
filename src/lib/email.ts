@@ -1,13 +1,13 @@
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { env } from '@/lib/env';
-import { deliveryMode, isUsableResendKey, readResendKey } from './resend-config';
+import { deliveryMode } from './mail-config';
+import { sendMail } from './mail-transport';
 
 /**
  * Generic transactional email delivery — offer/payment/dispute notifications,
  * as opposed to `magic-link.ts` which is specifically the sign-in credential.
  *
- * Shares the same Resend-or-local decision (`deliveryMode`) so the whole app
+ * Shares the same send-or-local decision (`deliveryMode`) so the whole app
  * has one answer to "does this environment actually send mail", but the
  * failure contract is different on purpose: a sign-in link that fails to send
  * blocks the one thing the user is waiting for, so `magic-link.ts` throws in
@@ -46,41 +46,15 @@ async function deliverLocally(message: EmailMessage): Promise<void> {
   }
 }
 
-async function deliverByResend(message: EmailMessage): Promise<void> {
-  const key = readResendKey();
-  if (!isUsableResendKey(key)) {
-    throw new Error('deliverByResend called without a usable Resend key');
-  }
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: env.EMAIL_FROM,
-      to: [message.to],
-      subject: message.subject,
-      text: message.text,
-      html: message.html,
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Resend rejected the request (${response.status}): ${detail.slice(0, 300)}`);
-  }
-}
-
 /** Best-effort. Never throws — see the module doc for why. */
 export async function sendEmail(message: EmailMessage): Promise<void> {
   try {
-    if (deliveryMode() === 'local') {
+    const mode = deliveryMode(message.to);
+    if (mode === 'local') {
       await deliverLocally(message);
       return;
     }
-    await deliverByResend(message);
+    await sendMail(mode, message);
   } catch (error) {
     console.error('[notify] delivery failed', { to: message.to, subject: message.subject, error });
   }
