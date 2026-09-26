@@ -52,6 +52,10 @@ export async function upsertRoom(args: { name: string; opensAt: Date; closesAt: 
     eject_at_room_exp: true,
     enable_prejoin_ui: true,
     enable_chat: true,
+    // Most students call from home Wi-Fi: show connection quality, and let
+    // them filter the room noise out.
+    enable_network_ui: true,
+    enable_noise_cancellation_ui: true,
     // Coach, student, and room for a parent to sit in.
     max_participants: 4,
     lang: 'tr',

@@ -49,7 +49,7 @@ banka hesabı/IBAN, imza beyannamesi.
 | **Supabase** | Veritabanı + belge depolama | Pro önerilir (günlük yedek). Bölge: **Frankfurt (eu-central-1)**. |
 | **Upstash** | İstek sınırlama (Redis) | Ücretsiz plan yeter. Vercel Marketplace'ten eklemek en kolayı. |
 | **Resend** | Giriş ve bildirim e-postaları | Ücretsiz plan: günde 100, ayda 3.000 mail. Alan adı doğrulanınca çalışır. |
-| **Daily** (daily.co) | Uygulama içi görüntülü görüşme | Ayda 10.000 katılımcı-dakika ücretsiz (~80 saatlik birebir görüşme), sonra dakika başı 0,004 $. dashboard.daily.co → Developers → API key. Anahtarı ekledikten sonra `npm run daily-check` kurulumu gerçek API'ye karşı doğrular. |
+| **Daily** (daily.co) | Uygulama içi görüntülü görüşme | Ayda 10.000 katılımcı-dakika ücretsiz (~80 saatlik birebir görüşme), sonra dakika başı 0,004 $. dashboard.daily.co → Developers → API key. **Hesaba kart tanımlanmadan görüşmeler açılmaz** ("Missing payment method"); ücretsiz kota yine geçerli, kart sadece aşımda kullanılır. Anahtarı ekledikten sonra `npm run daily-check` kurulumu gerçek API'ye karşı doğrular. |
 | Google Cloud (opsiyonel) | "Google ile giriş" | İstemiyorsan boş bırak, e-posta ile giriş çalışır. |
 
 ### Supabase kurulumu

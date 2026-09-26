@@ -112,7 +112,7 @@ export async function setExternalMeetingLink(bookingId: string, url: string): Pr
 }
 
 export type JoinResult =
-  | { ok: true; roomUrl: string; token: string }
+  | { ok: true; roomUrl: string; token: string; fallbackUrl: string | null }
   | { ok: false; message: string; fallbackUrl: string | null };
 
 /**
@@ -183,7 +183,7 @@ export async function joinMeeting(bookingId: string): Promise<JoinResult> {
       isOwner: isCoach,
       expiresAt: closesAt,
     });
-    return { ok: true, roomUrl: room.url, token };
+    return { ok: true, roomUrl: room.url, token, fallbackUrl };
   } catch (error) {
     console.error('[meetings] daily join failed', error);
     return {
@@ -227,4 +227,26 @@ export async function meetingPresence(bookingId: string): Promise<{ counterpartP
     console.error('[meetings] presence failed', error);
     return none;
   }
+}
+
+/**
+ * A call that failed inside Daily (after we handed out the token) never
+ * reaches our server on its own. Logging it here is what makes an account
+ * problem — billing, a revoked key, a Daily outage — visible in the logs
+ * instead of only on a student's screen.
+ */
+export async function reportMeetingError(bookingId: string, type: string, message: string): Promise<void> {
+  const userId = await viewer();
+  if (!userId) return;
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { coach: { select: { userId: true } }, student: { select: { userId: true } } },
+  });
+  if (!booking || (booking.coach.userId !== userId && booking.student.userId !== userId)) return;
+  console.error('[meetings] call failed in Daily', {
+    bookingId,
+    role: booking.coach.userId === userId ? 'coach' : 'student',
+    type: String(type).slice(0, 60),
+    message: String(message).slice(0, 300),
+  });
 }

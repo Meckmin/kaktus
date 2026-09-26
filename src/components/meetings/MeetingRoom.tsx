@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DailyCall, DailyEventObjectFatalError } from '@daily-co/daily-js';
+import type { DailyCall } from '@daily-co/daily-js';
 import { joinState, joinWindow } from '@/lib/meetings/rules';
-import { joinMeeting, meetingPresence } from '@/server/actions/meetings';
+import { describeFatal } from '@/lib/meetings/errors';
+import { joinMeeting, meetingPresence, reportMeetingError } from '@/server/actions/meetings';
 import { WeeklyPlanner } from '@/components/planner/WeeklyPlanner';
 import type { StudyTaskView } from '@/lib/planner/task-schema';
 
@@ -37,28 +38,6 @@ const THEME = {
     supportiveText: '#5C6B63',
   },
 };
-
-/** Daily's fatal error types, in words a student can act on. */
-function describeFatal(event: DailyEventObjectFatalError): string {
-  switch (event.error?.type) {
-    case 'exp-room':
-    case 'exp-token':
-      return 'Görüşmenin süresi doldu, oda kapandı.';
-    case 'nbf-room':
-    case 'nbf-token':
-      return 'Görüşme odası henüz açılmadı. Görüşme saatinden 10 dakika önce tekrar dene.';
-    case 'ejected':
-      return 'Görüşmeden çıkarıldın.';
-    case 'meeting-full':
-      return 'Görüşme odası dolu.';
-    case 'no-room':
-      return 'Görüşme odası bulunamadı. Tekrar dene; sorun sürerse koçunla sohbetten yazış.';
-    case 'not-allowed':
-      return 'Bu görüşmeye katılma iznin yok.';
-    default:
-      return 'Bağlantı kurulamadı ya da koptu. İnternet bağlantını kontrol edip tekrar dene.';
-  }
-}
 
 const clock = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' });
 
@@ -187,7 +166,12 @@ export function MeetingRoom({
         setPhase((current) => (current === 'failed' ? current : 'left'));
       })
       .on('error', (event) => {
-        if (event) setError(describeFatal(event));
+        if (event) {
+          setError(describeFatal(event));
+          void reportMeetingError(bookingId, event.error?.type ?? 'unknown', event.errorMsg ?? '');
+        }
+        // If the coach added a Zoom/Meet link, that's the way in now.
+        setFallbackUrl(result.fallbackUrl);
         setPhase('failed');
         void teardown();
       });

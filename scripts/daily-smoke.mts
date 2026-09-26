@@ -54,6 +54,7 @@ try {
   check(cfg.eject_at_room_exp === true, 'People are ejected when the room closes');
   check(cfg.lang === 'tr', 'Prebuilt UI is in Turkish', `lang=${cfg.lang}`);
   check(!cfg.enable_recording, 'Recording is off');
+  check(cfg.enable_network_ui === true && cfg.enable_noise_cancellation_ui === true, 'Network indicator and noise cancellation are on');
   check(cfg.max_participants === 4, 'Room is capped at 4', `max_participants=${cfg.max_participants}`);
 
   const later = new Date(closesAt.getTime() + 30 * 60_000);

@@ -42,6 +42,8 @@ describe('Daily client', () => {
       exp: closesAt.getTime() / 1000,
       eject_at_room_exp: true,
       lang: 'tr',
+      enable_network_ui: true,
+      enable_noise_cancellation_ui: true,
     });
     expect(calls[0].body.properties.enable_recording).toBeUndefined();
   });
