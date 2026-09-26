@@ -49,6 +49,7 @@ export default async function CoachProfilePage({
 
   const session = await auth();
   const authenticated = Boolean(session?.user?.id);
+  const hasName = Boolean(session?.user?.name?.trim());
 
   // Needed so the calendar can distinguish this student's own holds from
   // everyone else's — a student must never see their own open offer as "taken".
@@ -87,6 +88,7 @@ export default async function CoachProfilePage({
           days={calendar.days}
           timezone={calendar.timezone}
           authenticated={authenticated}
+          hasName={hasName}
           resumeDraft={resumeDraft}
         />
       </main>

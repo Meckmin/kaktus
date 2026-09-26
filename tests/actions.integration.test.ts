@@ -753,6 +753,33 @@ describe('submitOffer', () => {
     expect(offer.status).toBe('OFFERED');
   });
 
+  it('asks a nameless (magic-link) student for a name, and keeps an existing one', async () => {
+    const { coach } = await makeCoach();
+    const { user: studentUser } = await makeStudent();
+    await prisma.user.update({ where: { id: studentUser.id }, data: { name: null } });
+    asUser(studentUser.id);
+    const draft = {
+      coachProfileId: coach.id,
+      coachSlug: coach.slug,
+      packageType: 'EXPLORATORY' as const,
+      slots: [new Date(Date.now() + 7 * 86_400_000).toISOString()],
+      priceMinor: 50_000,
+      createdAt: new Date().toISOString(),
+    };
+
+    expect(await submitOffer({ ...draft, studentName: ' ' })).toEqual({
+      ok: false,
+      code: 'NEEDS_NAME',
+      message: 'Koçunun seni tanıması için adını yaz.',
+    });
+    expect((await submitOffer({ ...draft, studentName: '  Elif   Yılmaz ' })).ok).toBe(true);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: studentUser.id } })).name).toBe('Elif Yılmaz');
+
+    const { coach: other } = await makeCoach();
+    await submitOffer({ ...draft, coachProfileId: other.id, coachSlug: other.slug, studentName: 'Başka Ad' });
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: studentUser.id } })).name).toBe('Elif Yılmaz');
+  });
+
   it('refuses an offer under half the coach\'s list price for the package', async () => {
     const { coach } = await makeCoach();
     await prisma.pricingTier.create({
@@ -1122,6 +1149,37 @@ describe('meeting invites', () => {
     expect((await prisma.meetingInvite.findUniqueOrThrow({ where: { id: second.id } })).status).toBe('PENDING');
   });
 
+  it('refuses an invite that clashes with another student\'s session', async () => {
+    const { coachUser, engagement } = await fundedEngagement();
+    const other = await prisma.booking.findFirstOrThrow({ where: { engagementId: engagement.id } });
+    // Stand-in for another student's lesson: any SCHEDULED booking of this coach.
+    const lesson = await prisma.booking.update({
+      where: { id: other.id },
+      data: { startsAt: inDays(6, 20), endsAt: new Date(inDays(6, 20).getTime() + 3_600_000) },
+    });
+
+    asUser(coachUser.id);
+    const overlapping = await sendMeetingInvite({
+      engagementId: engagement.id,
+      startsAtLocal: dateToIstanbulLocal(new Date(lesson.startsAt.getTime() + 30 * 60_000)),
+      durationMinutes: 60,
+    });
+    expect(overlapping).toEqual({ ok: false, message: 'Bu saatte başka bir görüşmen var. Farklı bir saat seç.' });
+
+    // Back-to-back is fine, and so is moving that same session by half an hour.
+    expect(
+      await sendMeetingInvite({ engagementId: engagement.id, startsAtLocal: dateToIstanbulLocal(lesson.endsAt), durationMinutes: 60 }),
+    ).toEqual({ ok: true });
+    expect(
+      await sendMeetingInvite({
+        engagementId: engagement.id,
+        bookingId: lesson.id,
+        startsAtLocal: dateToIstanbulLocal(new Date(lesson.startsAt.getTime() + 30 * 60_000)),
+        durationMinutes: 60,
+      }),
+    ).toEqual({ ok: true });
+  });
+
   it('lets the student decline and the coach withdraw', async () => {
     const { coachUser, studentUser, engagement } = await fundedEngagement();
     const bookingsBefore = await prisma.booking.count({ where: { engagementId: engagement.id } });
@@ -1287,6 +1345,29 @@ describe('weekly planner', () => {
       ['2026-10-13', false],
       ['2026-10-16', false],
     ]);
+
+    // Copying again adds nothing; a task the coach changed in the meantime is not a duplicate.
+    expect(await copyPlannerWeek(conversation.id, MONDAY)).toEqual({ ok: true, data: 0 });
+    await editStudyTask(conversation.id, next.data[0].id, task({ day: '2026-10-13', quantity: 99 }));
+    expect(await copyPlannerWeek(conversation.id, MONDAY)).toEqual({ ok: true, data: 1 });
+  });
+
+  it("marks which tasks the student added, for the coach's eyes", async () => {
+    const { coachUser, studentUser, conversation } = await fundedEngagement();
+    asUser(coachUser.id);
+    await addStudyTask(conversation.id, task());
+    asUser(studentUser.id);
+    await addStudyTask(conversation.id, task({ kind: 'TEKRAR', description: 'Kendi tekrarım' }));
+
+    for (const viewer of [coachUser, studentUser]) {
+      asUser(viewer.id);
+      const week = await loadPlannerWeek(conversation.id, MONDAY);
+      if (!week.ok) throw new Error(week.message);
+      expect(week.data.map((t) => [t.kind, t.addedByStudent]).sort()).toEqual([
+        ['SORU_BANKASI', false],
+        ['TEKRAR', true],
+      ]);
+    }
   });
 });
 

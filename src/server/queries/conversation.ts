@@ -300,6 +300,8 @@ export async function listConversations() {
         take: 1,
         select: { id: true, status: true, priceMinor: true, initiatorRole: true },
       },
+      // Same rule as the planner's access check: a paid program, past or present.
+      _count: { select: { offers: { where: { engagement: { is: { status: { not: 'PENDING_PAYMENT' } } } } } } },
     },
   });
 
@@ -314,6 +316,8 @@ export async function listConversations() {
       lastMessageAt: row.lastMessageAt,
       liveOfferStatus: liveOffer?.status ?? null,
       liveOfferPriceMinor: liveOffer?.priceMinor ?? null,
+      /** The weekly planner is open for this pair. */
+      hasProgram: row._count.offers > 0,
       /** True when the ball is in the viewer's court. */
       awaitingViewer: liveOffer
         ? liveOffer.status === 'ACCEPTED'

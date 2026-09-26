@@ -37,12 +37,14 @@ export function CoachProfileClient({
   days,
   timezone,
   authenticated,
+  hasName,
   resumeDraft,
 }: {
   coach: ComposerCoach;
   days: CalendarDay[];
   timezone: string;
   authenticated: boolean;
+  hasName: boolean;
   resumeDraft: OfferDraft | null;
 }) {
   const router = useRouter();
@@ -61,7 +63,9 @@ export function CoachProfileClient({
     priceMinor:
       resumeDraft?.priceMinor ?? suggestedPriceMinor(defaultPackage, coach.pricingTiers) ?? 0,
     note: resumeDraft?.note ?? '',
+    studentName: resumeDraft?.studentName ?? '',
   });
+  const [askName, setAskName] = useState(!authenticated || !hasName);
 
   const update = useCallback(
     (patch: Partial<ComposerState>) => setState((current) => ({ ...current, ...patch })),
@@ -76,6 +80,7 @@ export function CoachProfileClient({
       slots: state.slots,
       priceMinor: state.priceMinor,
       note: state.note || undefined,
+      studentName: state.studentName.trim() || undefined,
       createdAt: new Date().toISOString(),
     }),
     [coach.id, coach.slug, state],
@@ -109,6 +114,7 @@ export function CoachProfileClient({
       return;
     }
     setError(result.message);
+    if (result.code === 'NEEDS_NAME') setAskName(true);
     // A taken slot invalidates the calendar we rendered; refetch so the student
     // is choosing from reality rather than from a stale grid.
     if (result.code === 'SLOT_TAKEN') {
@@ -197,6 +203,7 @@ export function CoachProfileClient({
         submitting={submitting}
         error={error}
         authenticated={authenticated}
+        askName={askName}
       />
     </>
   );

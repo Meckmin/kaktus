@@ -39,6 +39,7 @@ export interface ComposerState {
   slots: string[];
   priceMinor: number;
   note: string;
+  studentName: string;
 }
 
 export function OfferComposer({
@@ -53,6 +54,7 @@ export function OfferComposer({
   submitting,
   error,
   authenticated,
+  askName,
 }: {
   open: boolean;
   coach: ComposerCoach;
@@ -65,6 +67,8 @@ export function OfferComposer({
   submitting: boolean;
   error: string | null;
   authenticated: boolean;
+  /** The account has no name yet (or we can't tell before sign-in). */
+  askName: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const config = PACKAGE_CONFIG[state.packageType];
@@ -76,7 +80,10 @@ export function OfferComposer({
     role: 'STUDENT',
   });
   const belowFloor = state.priceMinor > 0 && state.priceMinor < minPrice;
-  const ready = state.slots.length === slotsNeeded && state.priceMinor >= minPrice;
+  const ready =
+    state.slots.length === slotsNeeded &&
+    state.priceMinor >= minPrice &&
+    (!askName || state.studentName.trim().length >= 2);
 
   // Read onClose through a ref so the effect below runs only when the dialog
   // opens or closes. Callers pass an inline arrow, which is a new function
@@ -230,6 +237,23 @@ export function OfferComposer({
 
             <PriceBreakdown breakdown={breakdown} />
           </section>
+
+          {askName && (
+            <section>
+              <label className="block">
+                <span className="font-medium">Adın</span>
+                <span className="mt-0.5 block text-sm text-muted">Koçun seni bu adla görecek.</span>
+                <input
+                  type="text"
+                  value={state.studentName}
+                  onChange={(event) => onChange({ studentName: event.target.value.slice(0, 60) })}
+                  autoComplete="name"
+                  placeholder="Ör. Elif Yılmaz"
+                  className="mt-2 w-full max-w-sm rounded-xl border border-stone bg-paper px-4 py-3 outline-none placeholder:text-stone focus:border-cactus"
+                />
+              </label>
+            </section>
+          )}
 
           <section>
             <label className="block">

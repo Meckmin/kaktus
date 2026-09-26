@@ -217,6 +217,7 @@ export function WeeklyPlanner({
                     <TaskCard
                       key={task.id}
                       task={task}
+                      showAuthor={role === 'COACH'}
                       pending={pending}
                       onToggle={() => run(() => markStudyTask(conversationId, task.id, !task.done))}
                       onEdit={() => setEditing({ day, task })}
@@ -285,18 +286,21 @@ export function WeeklyPlanner({
 
 function TaskCard({
   task,
+  showAuthor,
   pending,
   onToggle,
   onEdit,
   onDelete,
 }: {
   task: StudyTaskView;
+  showAuthor: boolean;
   pending: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const heading = [task.examPart, task.subject].filter(Boolean).join(' ');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
     <li className={['rounded-lg border border-stone/60 bg-paper p-2.5 text-sm', task.done ? 'opacity-60' : ''].join(' ')}>
       <div className="flex items-start gap-2">
@@ -312,6 +316,7 @@ function TaskCard({
           <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${KIND_STYLES[task.kind]}`}>
             {TASK_KIND_LABELS[task.kind]}
           </span>
+          {showAuthor && task.addedByStudent && <span className="ml-1.5 text-[11px] text-muted">Öğrenci ekledi</span>}
           {heading && <p className={`mt-1 font-medium ${task.done ? 'line-through' : ''}`}>{heading}</p>}
           {task.topic && <p className="text-muted">{task.topic}</p>}
           {task.resource && <p className="text-muted">{task.resource}</p>}
@@ -323,12 +328,25 @@ function TaskCard({
           {task.description && <p className="mt-1 whitespace-pre-line text-muted">{task.description}</p>}
           {task.editable && (
             <div className="mt-1.5 flex gap-3 text-xs">
-              <button type="button" onClick={onEdit} className="text-muted hover:text-cactus">
-                Düzenle
-              </button>
-              <button type="button" disabled={pending} onClick={onDelete} className="text-muted hover:text-bloom">
-                Sil
-              </button>
+              {confirmingDelete ? (
+                <>
+                  <button type="button" disabled={pending} onClick={onDelete} className="font-medium text-bloom">
+                    Evet, sil
+                  </button>
+                  <button type="button" onClick={() => setConfirmingDelete(false)} className="text-muted hover:text-ink">
+                    Vazgeç
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={onEdit} className="text-muted hover:text-cactus">
+                    Düzenle
+                  </button>
+                  <button type="button" onClick={() => setConfirmingDelete(true)} className="text-muted hover:text-bloom">
+                    Sil
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

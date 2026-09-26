@@ -23,6 +23,7 @@ const draftSchema = z.object({
   slots: z.array(z.string().datetime()).max(8),
   priceMinor: z.number().int().min(0).max(50_000_00),
   note: z.string().max(1000).optional(),
+  studentName: z.string().max(60).optional(),
   createdAt: z.string(),
 });
 
@@ -66,7 +67,7 @@ export async function clearOfferDraft(): Promise<void> {
 
 export type SubmitOfferResult =
   | { ok: true; offerId: string; conversationId: string }
-  | { ok: false; code: 'UNAUTHENTICATED' | 'NO_PROFILE' | 'SLOT_TAKEN' | 'INVALID' | 'FAILED'; message: string };
+  | { ok: false; code: 'UNAUTHENTICATED' | 'NO_PROFILE' | 'NEEDS_NAME' | 'SLOT_TAKEN' | 'INVALID' | 'FAILED'; message: string };
 
 /**
  * Creates the conversation if needed and submits the offer.
@@ -111,6 +112,18 @@ export async function submitOffer(draft: OfferDraft): Promise<SubmitOfferResult>
       code: 'NO_PROFILE',
       message: 'Öğrenci profilin henüz oluşmamış. Soruları tamamlayıp tekrar dene.',
     };
+  }
+
+  // Magic-link sign-ups arrive without a name, and a coach with several
+  // students cannot work with a list of "Öğrenci"s. Ask once, here, where the
+  // coach first meets them.
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id }, select: { name: true } });
+  const typedName = parsed.data.studentName?.trim().replace(/\s+/g, ' ') ?? '';
+  if (!user.name?.trim()) {
+    if (typedName.length < 2) {
+      return { ok: false, code: 'NEEDS_NAME', message: 'Koçunun seni tanıması için adını yaz.' };
+    }
+    await prisma.user.update({ where: { id: session.user.id }, data: { name: typedName } });
   }
 
   const coach = await prisma.coachProfile.findUnique({

@@ -195,13 +195,13 @@ function ConversationList({
   return (
     <ul className="mt-3 space-y-px overflow-hidden rounded-xl border border-stone/70 bg-stone/60">
       {items.map((item) => (
-        <li key={item.id} className="bg-paper">
+        <li
+          key={item.id}
+          className={['flex items-stretch bg-paper', highlight ? 'border-l-2 border-l-bloom' : ''].join(' ')}
+        >
           <Link
             href={`/panel/sohbet/${item.id}`}
-            className={[
-              'flex items-baseline justify-between gap-4 px-5 py-4 transition-colors hover:bg-cactus-pale/40',
-              highlight ? 'border-l-2 border-l-bloom' : '',
-            ].join(' ')}
+            className="flex min-w-0 flex-1 items-baseline justify-between gap-4 px-5 py-4 transition-colors hover:bg-cactus-pale/40"
           >
             <span className="min-w-0">
               <span className="block truncate font-medium">{item.counterpartyName}</span>
@@ -221,6 +221,15 @@ function ConversationList({
               )}
             </span>
           </Link>
+          {/* The plan is what a student opens every day; one tap, not two. */}
+          {item.hasProgram && (
+            <Link
+              href={`/panel/program/${item.id}`}
+              className="flex shrink-0 items-center border-l border-stone/60 px-4 text-sm text-cactus transition-colors hover:bg-cactus-pale/40"
+            >
+              Program
+            </Link>
+          )}
         </li>
       ))}
     </ul>

@@ -30,6 +30,8 @@ export interface OfferDraft {
   slots: string[];
   priceMinor: number;
   note?: string;
+  /** Only used when the account has no name yet (magic-link sign-ups). */
+  studentName?: string;
   createdAt: string;
 }
 

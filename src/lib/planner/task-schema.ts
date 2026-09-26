@@ -58,4 +58,6 @@ export interface StudyTaskView {
   done: boolean;
   /** Whether the viewer may edit or delete it (coach: any; student: their own). */
   editable: boolean;
+  /** Written by the student rather than the coach. */
+  addedByStudent: boolean;
 }

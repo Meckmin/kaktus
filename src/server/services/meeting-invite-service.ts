@@ -89,6 +89,25 @@ export async function createInvite(
   }
 
   const endsAt = new Date(args.startsAt.getTime() + args.durationMinutes * 60_000);
+
+  // The overlap constraint only fires when the student accepts. A coach with
+  // several students should hear about a clash now, not have the student hit
+  // it later. (Two pending invites may still share a time; the constraint
+  // settles which one wins.)
+  const clash = await prisma.booking.findFirst({
+    where: {
+      coachProfileId: engagement.coachProfileId,
+      status: 'SCHEDULED',
+      startsAt: { lt: endsAt },
+      endsAt: { gt: args.startsAt },
+      ...(args.bookingId ? { id: { not: args.bookingId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (clash) {
+    throw new InviteError('Bu saatte başka bir görüşmen var. Farklı bir saat seç.', 'SLOT_TAKEN');
+  }
+
   const invite = await prisma.$transaction(async (tx) => {
     // A newer proposal for the same session replaces the older one.
     if (args.bookingId) {

@@ -88,6 +88,8 @@ function toView(task: TaskRow, access: PlannerAccess): StudyTaskView {
     unit: task.unit,
     done: Boolean(task.completedAt),
     editable: access.role === 'COACH' || task.createdById === access.userId,
+    // Only two people can write to a pair's planner.
+    addedByStudent: (task.createdById === access.userId) === (access.role === 'STUDENT'),
   };
 }
 
@@ -178,8 +180,23 @@ export async function copyWeekForward(access: PlannerAccess, fromMonday: string)
     },
   });
   if (tasks.length === 0) return 0;
+
+  // Pressing copy twice (or after adding a few tasks by hand) must not double
+  // the next week: skip anything already there.
+  const existing = await prisma.studyTask.findMany({
+    where: {
+      conversationId: access.conversationId,
+      day: { gte: dayToDate(addDays(fromMonday, 7)), lte: dayToDate(addDays(fromMonday, 13)) },
+    },
+  });
+  const key = (t: TaskRow, day: string) =>
+    JSON.stringify([day, t.examPart, t.subject, t.topic, t.kind, t.resource, t.description, t.quantity, t.unit]);
+  const taken = new Set(existing.map((t) => key(t, dateToDay(t.day))));
+  const toCopy = tasks.filter((t) => !taken.has(key(t, addDays(dateToDay(t.day), 7))));
+  if (toCopy.length === 0) return 0;
+
   await prisma.studyTask.createMany({
-    data: tasks.map((t) => ({
+    data: toCopy.map((t) => ({
       conversationId: t.conversationId,
       day: dayToDate(addDays(dateToDay(t.day), 7)),
       position: t.position,
@@ -194,5 +211,5 @@ export async function copyWeekForward(access: PlannerAccess, fromMonday: string)
       createdById: access.userId,
     })),
   });
-  return tasks.length;
+  return toCopy.length;
 }
